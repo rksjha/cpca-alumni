@@ -3,3 +3,5 @@ private/
 .DS_Store
 .claude/
 node_modules/
+firestore-debug.log
+*.log
