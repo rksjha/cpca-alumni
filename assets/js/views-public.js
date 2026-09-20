@@ -46,6 +46,11 @@ CPCA.views = CPCA.views || {};
           <div class="step"><div class="num">3</div><h3>Build your profile</h3><p class="muted small">Add your company, career, photo and social links. An administrator verifies you, and you appear in the directory.</p></div>
         </div>
       </div></section>
+      <section class="block" style="padding-top:0"><div class="wrap"><a class="college-teaser" href="#/college">
+        <img src="assets/img/cpca-building.jpg" alt="Chimanbhai Patel College of Agriculture, main building" loading="lazy">
+        <div><span class="eyebrow">Our college · since June 1982</span><h2>It began in a borrowed primary-school building.</h2>
+          <p class="muted" style="margin-bottom:14px">The CPCA story for those who lived it — GAU to SDAU, the hostels, the village semester, and the research that grew around us.</p>
+          <span class="btn btn-primary btn-sm">Read the story →</span></div></a></div></section>
       ${CPCA.community.socialSection()}
       <section class="block" style="padding-top:0"><div class="wrap">${CPCA.community.inviteBlock()}</div></section>`;
     CPCA.community.wireSocial(app); CPCA.community.wireInvite(app);

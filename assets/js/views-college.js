@@ -30,7 +30,7 @@
 
   CPCA.views.college = function (app) {
     app.innerHTML = `
-      <section class="hero" style="padding:64px 0 88px"><div class="wrap">
+      <section class="hero hero-photo" style="padding:64px 0 88px"><div class="wrap">
         <span class="eyebrow">Our college · since June 1982</span>
         <h1 style="font-size:clamp(1.9rem,4.4vw,3rem)">It began in a borrowed<br>primary-school building.</h1>
         <p class="lead" style="margin-bottom:0">Four decades on, Chimanbhai Patel College of Agriculture stands at the heart of an 1,185-hectare university campus at the foot of the Aravallis — and its graduates have built seed companies, crop-care firms, nurseries, cold chains and consultancies across Gujarat and beyond. This is the story we share.</p>
@@ -75,9 +75,10 @@
         ${CPCA.community.inviteBlock()}
 
         <div class="panel"><h2>Official links &amp; sources</h2>
+          <a href="${S}" target="_blank" rel="noopener" style="display:block;margin-bottom:14px"><img src="assets/img/sdau-logo-official.png" alt="Sardarkrushinagar Dantiwada Agricultural University — official website" style="max-width:360px;width:100%;height:auto"></a>
           <p class="small muted">College office: C. P. College of Agriculture, SDAU, Sardarkrushinagar 385506, Dist. Banaskantha, Gujarat. For admissions, certificates and transcripts please contact the college through the official website.</p>
           <div class="links">${SOURCES.map(([label, url]) => `<a class="btn btn-ghost btn-sm" href="${url}" target="_blank" rel="noopener">${label} ↗</a>`).join("")}</div>
-          <p class="hint" style="margin-top:12px">Facts on this page were taken from the University's official website in September 2026 and written in our own words. This portal is alumni-run and not an official University site. Spotted an error, or have a photograph or memory to add? Write to the administrators.</p>
+          <p class="hint" style="margin-top:12px">The college photograph and the University logo are the University's own, from sdau.edu.in. Facts on this page were taken from the University's official website in September 2026 and written in our own words. This portal is alumni-run and not an official University site. Spotted an error, or have a photograph or memory to add? Write to the administrators.</p>
         </div>
       </div>`;
     CPCA.community.wireInvite(app);

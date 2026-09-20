@@ -22,7 +22,7 @@ p { margin: 0 0 1em; } a { color: var(--green-600); }
 .nav .wrap { display: flex; align-items: center; gap: 18px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--green-900); font-family: var(--serif); font-weight: 600; font-size: 1.12rem; margin-right: auto; white-space: nowrap; }
 .brand-mark { width: 36px; height: 36px; border-radius: 10px; background: var(--green-800); display: grid; place-items: center; flex: none; }
-.brand-mark svg { width: 22px; height: 22px; }
+.brand-mark svg { width: 22px; height: 22px; } img.brand-mark { display: block; background: none; }
 .nav a.link { color: var(--ink); text-decoration: none; font-weight: 500; font-size: .95rem; padding: 6px 2px; border-bottom: 2px solid transparent; }
 .nav a.link:hover, .nav a.link.active { border-color: var(--gold); }
 @media (max-width: 640px) { .nav .wrap { gap: 12px; } .brand span.long { display: none; } .nav a.link.opt { display: none; } }
@@ -99,6 +99,11 @@ table { width: 100%; border-collapse: collapse; font-size: .9rem; } th, td { tex
 .timeline { margin-top: 18px; border-left: 2px solid var(--gold); padding-left: 20px; } .tl-row { position: relative; padding: 0 0 18px; } .tl-row:last-child { padding-bottom: 0; }
 .tl-row::before { content: ""; position: absolute; left: -27px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--gold); border: 2px solid #fff; }
 .tl-when { font-family: var(--serif); font-weight: 600; color: var(--green-800); } .tl-what { font-size: .93rem; color: var(--muted); }
+.hero-photo { background: linear-gradient(160deg, rgba(12,51,36,.93), rgba(15,61,46,.84) 55%, rgba(20,85,60,.78)), url(../img/cpca-building.jpg) center 35% / cover no-repeat; }
+.college-teaser { display: grid; grid-template-columns: 1.1fr 1fr; gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s; }
+.college-teaser:hover { box-shadow: var(--shadow); transform: translateY(-2px); } .college-teaser img { width: 100%; height: 100%; min-height: 220px; object-fit: cover; display: block; }
+.college-teaser > div { padding: 28px; align-self: center; } .college-teaser .eyebrow { color: #8a6d10; margin-bottom: 10px; } .college-teaser h2 { font-size: 1.5rem; }
+@media (max-width: 760px) { .college-teaser { grid-template-columns: 1fr; } }
 #toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); background: var(--ink); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: .92rem; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; max-width: 90vw; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); } #toast.err { background: var(--danger); }
 .preview-bar { background: var(--gold-soft); color: #5a4706; font-size: .85rem; text-align: center; padding: 8px 16px; border-bottom: 1px solid #e9d99b; }

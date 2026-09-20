@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 85 540 825" role="img" aria-label="CPCA Alumni Network symbol">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2a9a5c"/><stop offset=".55" stop-color="#1a6e41"/><stop offset="1" stop-color="#0f3d2e"/></linearGradient></defs>
+  <path d="M482 440V640A192.5 192.5 0 0 1 97 640V305A145 145 0 0 1 387 305V610A96 96 0 0 1 195 610V578A96 96 0 0 1 291 482H325" fill="none" stroke="url(#g)" stroke-width="85" stroke-linejoin="round"/>
+</svg>
