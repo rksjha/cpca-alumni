@@ -1,0 +1,13 @@
+{
+  "name": "cpca-alumni-portal-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offline tests for the portal database security rules",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project cpca-test \"node tests/rules.test.mjs\""
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase-tools": "^13.35.1"
+  }
+}

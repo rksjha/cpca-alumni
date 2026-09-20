@@ -90,8 +90,7 @@
 
   CPCA.views.me = async function (app, _arg, ctx) {
     if (!ctx.user) { location.hash = "#/join"; return; }
-    const meta = ctx.user.user_metadata || {};
-    const id = await data.joinNetwork(meta.full_name || meta.name || null);
+    const id = await data.joinNetwork(ctx.user.displayName || null); // the name Google gives us, if any
     const p = await data.getProfile(id);
     const contact = p.profile_private || { email: ctx.user.email, visibility: "members" };
     let tab = (p.education || []).some((e) => e.is_cpca) ? "basics" : "education";

@@ -2,3 +2,4 @@ private/
 .claude-flow/
 .DS_Store
 .claude/
+node_modules/
