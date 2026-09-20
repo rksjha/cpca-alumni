@@ -6,8 +6,7 @@ CPCA.community = (function () {
   const SITE = "https://cpcaalumni.org/";
 
   const OFFICIAL = [
-    { name: "SDAU on Facebook", note: "Official University page", url: "https://www.facebook.com/sdauni",
-      embed: "https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fsdauni&tabs=timeline&width=340&height=420&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=false" },
+    { name: "SDAU on Facebook", note: "Official University page", url: "https://www.facebook.com/sdauni", embed: null }, // Facebook will not render this page inside other sites
     { name: "SDAU on YouTube", note: "Official University channel", url: "https://www.youtube.com/channel/UCmlGpKXf0Co-rzW8Sh27Xew",
       embed: "https://www.youtube-nocookie.com/embed/videoseries?list=UUmlGpKXf0Co-rzW8Sh27Xew" },
     { name: "SDAU on Instagram", note: "Official University account", url: "https://www.instagram.com/sdau_official_/",
@@ -28,8 +27,9 @@ CPCA.community = (function () {
       <div class="social-grid">${OFFICIAL.map((s, i) => `
         <div class="panel social-card"><div class="item-row" style="align-items:center;margin-bottom:12px"><div><h3 style="margin:0">${esc(s.name)}</h3><div class="small muted">${esc(s.note)}</div></div>
           <a class="btn btn-ghost btn-sm" href="${esc(s.url)}" target="_blank" rel="noopener">Open ↗</a></div>
-          <div class="social-frame" data-embed="${i}"><button class="btn btn-primary btn-sm" data-load="${i}">Show latest posts</button>
-            <div class="hint" style="margin-top:8px">Loads content from ${esc(new URL(s.url).hostname.replace("www.", ""))}</div></div></div>`).join("")}
+          <div class="social-frame" data-embed="${i}">${s.embed
+            ? `<button class="btn btn-primary btn-sm" data-load="${i}">Show latest posts</button><div class="hint" style="margin-top:8px">Loads content from ${esc(new URL(s.url).hostname.replace("www.", ""))}</div>`
+            : `<a class="btn btn-primary btn-sm" href="${esc(s.url)}" target="_blank" rel="noopener">See latest posts on Facebook ↗</a><div class="hint" style="margin-top:8px">Facebook does not allow this page to be shown inside other sites.</div>`}</div></div>`).join("")}
       </div>
       <div class="cards" style="margin-top:18px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">${COMMUNITY.map((c) => `
         <a class="card" style="padding:16px" href="${esc(c.url)}" target="_blank" rel="noopener"><h3 style="font-size:1rem">${esc(c.name)} ↗</h3><div class="small muted">${esc(c.where)}</div></a>`).join("")}
