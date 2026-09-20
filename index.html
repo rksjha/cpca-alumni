@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPCA Alumni Network — C. P. College of Agriculture, SDAU</title>
+<meta name="description" content="The alumni network of C. P. College of Agriculture, Sardarkrushinagar Dantiwada Agricultural University. Find batchmates, discover alumni enterprises and stay connected.">
+<meta name="theme-color" content="#0f3d2e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='10' fill='%230f3d2e'/%3E%3Cpath d='M18 29V14M18 20c-5 0-7-3-7-7 5 0 7 3 7 7zm0-3c4.5 0 6.500-2.500 6.500-6.500C20 10.500 18 13 18 17z' stroke='%23c9a227' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/styles.css?v=1">
+</head>
+<body>
+<div id="preview-bar" class="preview-bar" hidden>Preview mode — showing the college's distinguished-alumni list. Member sign-in opens once the portal's database is connected.</div>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#/">
+      <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#c9a227" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9M12 14c-4 0-5.500-2.500-5.500-5.500C10.500 8.500 12 11 12 14zm0-2.500c3.500 0 5-2 5-5-3.500 0-5 2-5 5z"/></svg></span>
+      <span>CPCA Alumni<span class="long"> Network</span></span>
+    </a>
+    <a class="link" data-nav="directory" href="#/directory">Directory</a>
+    <a class="link opt" data-nav="about" href="#/about">About</a>
+    <a class="link" data-nav="admin" href="#/admin" id="nav-admin" hidden>Admin</a>
+    <a class="btn btn-ghost btn-sm" href="#/me" id="nav-me" hidden>My profile</a>
+    <a class="btn btn-primary btn-sm" href="#/join" id="nav-join">Join / Sign in</a>
+  </div>
+</header>
+
+<main id="app"><div class="spinner" role="status" aria-label="Loading"></div></main>
+
+<footer>
+  <div class="wrap cols">
+    <div>
+      <strong style="color:#fff;font-family:var(--serif);font-size:1.05rem">CPCA Alumni Network</strong><br>
+      C. P. College of Agriculture · Sardarkrushinagar Dantiwada Agricultural University<br>
+      <span class="small">An alumni-led initiative. Not an official website of the University.</span>
+    </div>
+    <div>
+      <a href="#/directory">Alumni directory</a> · <a href="#/join">Join the network</a> · <a href="#/about">About &amp; privacy</a><br>
+      <span class="small">Technology partner: <a href="https://www.shivagroup.org.in" target="_blank" rel="noopener">Shiva Consultancy Group</a></span>
+    </div>
+  </div>
+</footer>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/js/config.js?v=1"></script>
+<script src="assets/data/preview-data.js?v=1"></script>
+<script src="assets/js/ui.js?v=1"></script>
+<script src="assets/js/data.js?v=1"></script>
+<script src="assets/js/views-public.js?v=1"></script>
+<script src="assets/js/views-member.js?v=1"></script>
+<script src="assets/js/views-admin.js?v=1"></script>
+<script src="assets/js/app.js?v=1"></script>
+</body>
+</html>
