@@ -1,0 +1,95 @@
+rules_version = '2';
+
+// CPCA Alumni Network — who may read and write what.
+//   * Anyone may read an APPROVED profile (name, batch, headline, companies, education, career).
+//   * Email / phone / WhatsApp and the members-only company figures live in a separate
+//     document that only the owner, approved members or administrators can read
+//     (each alumnus chooses: members / public / hidden).
+//   * A new joiner stays 'pending' until an administrator approves them.
+//   * Nobody can approve themselves, award themselves the badge, or take over someone else's profile.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()      { return request.auth != null; }
+    function email()         { return signedIn() && request.auth.token.email_verified ? request.auth.token.email.lower() : ''; }
+    function isAdmin()       { return email() != '' && exists(/databases/$(database)/documents/admins/$(email())); }
+    function myProfileId()   { return signedIn() ? get(/databases/$(database)/documents/members/$(request.auth.uid)).data.profileId : ''; }
+    function isMember()      { return signedIn()
+                                 && exists(/databases/$(database)/documents/members/$(request.auth.uid))
+                                 && get(/databases/$(database)/documents/profiles/$(myProfileId())).data.status == 'approved'; }
+
+    // ── Alumni profiles (the public half) ──
+    match /profiles/{profileId} {
+      allow read: if resource.data.status == 'approved'
+                  || (signedIn() && resource.data.userId == request.auth.uid)
+                  || isAdmin();
+
+      // A member creates their own profile, always as 'pending' and never distinguished.
+      allow create: if signedIn()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.isDistinguished == false
+                    && request.resource.data.fullName is string
+                    && request.resource.data.fullName.size() <= 120;
+
+      // Owners edit their own details but can never change status, badge or ownership.
+      allow update: if signedIn()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.status == resource.data.status
+                    && request.resource.data.isDistinguished == resource.data.isDistinguished
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.fullName is string
+                    && request.resource.data.fullName.size() <= 120;
+
+      // Claiming a ready-made profile from the college's list: only an unclaimed profile,
+      // and only by the person whose verified email the college recorded against it.
+      allow update: if signedIn()
+                    && resource.data.userId == null
+                    && email() != ''
+                    && exists(/databases/$(database)/documents/claims/$(email()))
+                    && get(/databases/$(database)/documents/claims/$(email())).data.profileId == profileId
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == resource.data.status
+                    && request.resource.data.isDistinguished == resource.data.isDistinguished;
+
+      // Administrators approve, suspend, award the badge, and import the college's list.
+      allow create, update, delete: if isAdmin();
+
+      // ── Contact card and members-only company figures ──
+      match /private/contact {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/profiles/$(profileId)).data.userId == request.auth.uid)
+                    || (
+                      get(/databases/$(database)/documents/profiles/$(profileId)).data.status == 'approved'
+                      && (resource.data.visibility == 'public'
+                          || (resource.data.visibility == 'members' && isMember()))
+                    );
+        allow write: if isAdmin()
+                     || (signedIn() && get(/databases/$(database)/documents/profiles/$(profileId)).data.userId == request.auth.uid);
+      }
+    }
+
+    // ── uid → profile lookup, written once when a member joins ──
+    match /members/{uid} {
+      allow read:   if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Administrators (document id = verified email address) ──
+    match /admins/{adminEmail} {
+      allow read:  if isAdmin() || (signedIn() && email() == adminEmail);
+      allow write: if isAdmin();
+    }
+
+    // ── Claim keys from the college's list (document id = email address).
+    //    A signed-in person can look up only their own address; nobody can list them. ──
+    match /claims/{claimEmail} {
+      allow get:    if isAdmin() || (signedIn() && email() == claimEmail);
+      allow list:   if isAdmin();
+      allow write:  if isAdmin();
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

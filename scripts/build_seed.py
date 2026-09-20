@@ -128,6 +128,11 @@ insert into public.company_stats (company_id, employees, turnover) select id, {q
     sql.append("commit;")
     (ROOT / "private" / "seed_distinguished.sql").write_text("\n".join(sql), encoding="utf-8")
 
+    # For the portal's own admin-only import tool (Firebase). Contains personal data: never publish.
+    (ROOT / "private" / "seed_alumni.json").write_text(
+        json.dumps({"source": "CPCA distinguished alumni list", "people": people}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+
     print(f"OK: {len(people)} alumni -> {out_js.relative_to(ROOT)} and private/seed_distinguished.sql")
     for p in people:
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.(com|in|co\.in|org|net)", p["email"]):

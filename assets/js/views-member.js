@@ -15,27 +15,19 @@
     app.innerHTML = `<div class="wrap narrow"><div class="panel">
       <h2 class="center">Join the CPCA Alumni Network</h2>
       <p class="muted small center">New here or returning — it's the same step. No password needed.</p>
-      <button class="btn btn-ghost btn-block" id="google" style="margin-bottom:10px">Continue with Google</button>
-      <button class="btn btn-ghost btn-block" id="linkedin">Continue with LinkedIn</button>
+      <button class="btn btn-ghost btn-block" id="google">Continue with Google</button>
       <div class="divider">or use your email</div>
       <form id="email-form"><div class="field"><label for="email">Email address</label><input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></div>
         <button class="btn btn-primary btn-block">Email me a sign-in link</button></form>
-      <form id="code-form" hidden><div class="banner info">We've emailed you. Click the link in that email — or, if it shows a 6-digit code, enter it here.</div>
-        <div class="field"><label for="code">6-digit code</label><input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code"></div>
-        <button class="btn btn-primary btn-block">Verify and continue</button></form>
+      <div id="sent" hidden><div class="banner info">✓ Check your inbox. Open the link we've just emailed you and you'll be signed in — no password needed. (Look in Spam if it hasn't arrived in a minute.)</div></div>
       <p class="hint center" style="margin-top:16px">Listed among the college's distinguished alumni? Use the same email the college has for you and your ready-made profile is handed to you automatically.</p>
     </div></div>`;
 
     const $ = (s) => app.querySelector(s);
     $("#google").onclick = (e) => busy(e.target, () => data.signInWith("google"));
-    $("#linkedin").onclick = (e) => busy(e.target, () => data.signInWith("linkedin_oidc"));
     $("#email-form").onsubmit = (e) => {
       e.preventDefault();
-      busy(e.submitter, async () => { await data.sendEmailCode($("#email").value.trim()); $("#email-form").hidden = true; $("#code-form").hidden = false; });
-    };
-    $("#code-form").onsubmit = (e) => {
-      e.preventDefault();
-      busy(e.submitter, async () => { await data.verifyEmailCode($("#email").value.trim(), $("#code").value.trim()); location.hash = "#/me"; });
+      busy(e.submitter, async () => { await data.sendEmailCode($("#email").value.trim()); $("#email-form").hidden = true; $("#sent").hidden = false; });
     };
   };
 
@@ -174,7 +166,7 @@
             if (saved.is_cpca && !p.batch_year && saved.end_year) { await data.saveProfile(p.id, { batch_year: saved.end_year }); p.batch_year = saved.end_year; }
             return saved;
           },
-          remove: (r) => data.deleteRow("education", r.id), changed: refreshStatus,
+          remove: (r) => data.deleteRow("education", p.id, r.id), changed: refreshStatus,
         });
       },
 
@@ -198,7 +190,7 @@
             saved.company_stats = { employees: row.employees, turnover: row.turnover };
             return saved;
           },
-          remove: (r) => data.deleteRow("companies", r.id),
+          remove: (r) => data.deleteRow("companies", p.id, r.id),
         });
       },
 
@@ -214,7 +206,7 @@
             { name: "description", label: "What you did", type: "textarea", max: 2000, wide: true },
           ],
           title: (r) => esc(r.title || r.organisation), subtitle: (r) => [r.title && r.organisation, r.location, yearSpan(r.start_year, r.end_year, r.is_current)].filter(Boolean).join(" · "),
-          toForm: (r) => r, save: (row) => data.saveRow("experience", p.id, row), remove: (r) => data.deleteRow("experience", r.id),
+          toForm: (r) => r, save: (row) => data.saveRow("experience", p.id, row), remove: (r) => data.deleteRow("experience", p.id, r.id),
         });
       },
 

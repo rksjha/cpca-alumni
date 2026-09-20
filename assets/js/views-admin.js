@@ -41,6 +41,12 @@
         ${section("Waiting for approval", by("pending"), "Nobody is waiting. New joiners will appear here.")}
         ${section("Approved members", by("approved"), "No approved members yet.")}
         ${by("suspended").length ? section("Suspended / rejected", by("suspended"), "") : ""}
+        <div class="panel"><h2>Import the college's list</h2>
+          <p class="small muted">Choose the alumni file prepared for this portal (<code>seed_alumni.json</code>). Each alumnus is added as an approved “Pride of CPCA” profile that they can later claim with their own email address. Anyone already imported is skipped, so running it twice is safe. The file stays on your computer — only the profiles go to the portal.</p>
+          <label class="btn btn-primary btn-sm" style="display:inline-flex">Choose file and import<input type="file" id="import-file" accept="application/json,.json" hidden></label>
+          <div id="import-log" class="small muted" style="margin-top:12px"></div>
+        </div>
+
         <div class="panel"><h2>Administrators</h2><p class="small muted">People who sign in with these email addresses can approve members and manage this list.</p>
           ${admins.map((a) => `<div class="item item-row"><span>${esc(a.email)}</span>${a.email === (ctx.user.email || "").toLowerCase() ? '<span class="chip">You</span>' : `<button class="btn btn-danger btn-sm" data-remove-admin="${esc(a.email)}">Remove</button>`}</div>`).join("")}
           <form id="add-admin" style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap"><input type="email" required placeholder="colleague@example.com" style="flex:1;min-width:220px" aria-label="New administrator email"><button class="btn btn-primary btn-sm">Add administrator</button></form>
@@ -58,6 +64,30 @@
         if (!confirm(`Remove ${b.dataset.removeAdmin} as administrator?`)) return;
         busy(b, async () => { await data.adminRemoveEmail(b.dataset.removeAdmin); admins.splice(admins.findIndex((a) => a.email === b.dataset.removeAdmin), 1); render(); });
       }));
+      app.querySelector("#import-file").onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const log = app.querySelector("#import-log");
+        try {
+          const parsed = JSON.parse(await file.text());
+          const people = Array.isArray(parsed) ? parsed : parsed.people;
+          if (!Array.isArray(people) || !people.length) throw new Error("That file has no alumni in it.");
+          if (!confirm(`Import ${people.length} alumni into the portal?`)) return;
+          log.textContent = "Importing…";
+          const result = await data.adminImport(people, (added, skipped, name) => {
+            log.textContent = `Added ${added}, skipped ${skipped} — ${name}`;
+          });
+          log.textContent = `Finished: ${result.added} added, ${result.skipped} already present.`;
+          toast(`Imported ${result.added} alumni`);
+          const fresh = await data.adminListMembers();
+          fresh.forEach((m) => (m.profile_private = data.one(m.profile_private)));
+          members.length = 0; members.push(...fresh); render();
+        } catch (err) {
+          console.error(err);
+          log.textContent = "Import failed: " + (err.message || err);
+          toast("Import failed — " + (err.message || err), true);
+        } finally { e.target.value = ""; }
+      };
       app.querySelector("#add-admin").onsubmit = (e) => {
         e.preventDefault();
         const email = e.target.querySelector("input").value.trim().toLowerCase();

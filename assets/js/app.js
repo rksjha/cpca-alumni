@@ -6,7 +6,7 @@
   const ROUTES = { "": "home", directory: "directory", alumni: "profile", join: "join", me: "me", admin: "admin", about: "about", college: "college" };
 
   async function refreshSession() {
-    ctx.user = await data.getUser();
+    ctx.user = data.getUser();
     ctx.isAdmin = ctx.user ? await data.isAdmin().catch(() => false) : false;
     document.getElementById("nav-join").hidden = Boolean(ctx.user);
     document.getElementById("nav-me").hidden = !ctx.user;
@@ -31,7 +31,8 @@
 
   async function start() {
     document.getElementById("preview-bar").hidden = data.live;
-    const returningFromSignIn = /[?&]code=/.test(location.search); // back from Google / LinkedIn / email link
+    const returningFromSignIn = data.live && data.isEmailLink(); // opened from an emailed sign-in link
+    await data.ready();      // Firebase restores any existing session first
     await refreshSession();
     if (returningFromSignIn && ctx.user) location.hash = "#/me";
     data.onAuthChange((event) => {
