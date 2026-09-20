@@ -119,7 +119,8 @@
         <div class="item-row" style="align-items:center;margin-bottom:18px"><h1 style="font-size:2rem;margin:0">My profile</h1><button class="btn btn-ghost btn-sm" id="signout">Sign out</button></div>
         <div id="status">${statusBanner()}</div>
         <div class="tabs" role="tablist">${tabs.map(([k, label]) => `<button role="tab" class="tab ${k === tab ? "active" : ""}" data-tab="${k}">${label}</button>`).join("")}</div>
-        <div id="pane"></div></div>`;
+        <div id="pane"></div>${CPCA.community.inviteBlock(p.batch_year)}</div>`;
+      CPCA.community.wireInvite(app);
       app.querySelector("#signout").onclick = (e) => busy(e.target, async () => { await data.signOut(); location.hash = "#/"; });
       app.querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; shell(); }));
       panes[tab](app.querySelector("#pane"));

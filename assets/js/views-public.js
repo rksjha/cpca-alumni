@@ -45,7 +45,10 @@ CPCA.views = CPCA.views || {};
           <div class="step"><div class="num">2</div><h3>Tell us your CPCA degree</h3><p class="muted small">Add the degree(s) you earned at C. P. College of Agriculture — UG, PG, PhD or all three — with your pass-out year.</p></div>
           <div class="step"><div class="num">3</div><h3>Build your profile</h3><p class="muted small">Add your company, career, photo and social links. An administrator verifies you, and you appear in the directory.</p></div>
         </div>
-      </div></section>`;
+      </div></section>
+      ${CPCA.community.socialSection()}
+      <section class="block" style="padding-top:0"><div class="wrap">${CPCA.community.inviteBlock()}</div></section>`;
+    CPCA.community.wireSocial(app); CPCA.community.wireInvite(app);
   };
 
   // ── Directory ──

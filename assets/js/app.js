@@ -3,7 +3,7 @@
   const data = CPCA.data;
   const app = document.getElementById("app");
   const ctx = { user: null, isAdmin: false };
-  const ROUTES = { "": "home", directory: "directory", alumni: "profile", join: "join", me: "me", admin: "admin", about: "about" };
+  const ROUTES = { "": "home", directory: "directory", alumni: "profile", join: "join", me: "me", admin: "admin", about: "about", college: "college" };
 
   async function refreshSession() {
     ctx.user = await data.getUser();
