@@ -1,4 +1,23 @@
 {
   "firestore": { "rules": "firestore.rules" },
-  "emulators": { "firestore": { "port": 8085 }, "ui": { "enabled": false } }
+  "emulators": { "firestore": { "port": 8085 }, "ui": { "enabled": false } },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json", "firestore.rules", "**/.*", "**/node_modules/**",
+      "private/**", "scripts/**", "tests/**", "package.json", "package-lock.json", "CNAME", "*.log"
+    ],
+    "cleanUrls": true,
+    "headers": [
+      { "source": "**/*.@(js|css|svg|png|jpg|jpeg|webp|json)",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] },
+      { "source": "**",
+        "headers": [
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+        ] }
+    ]
+  }
 }
