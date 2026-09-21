@@ -27,3 +27,12 @@ Runs 37 checks against Google's offline test database. Needs Java (`brew install
 Everything in `private/` — the college's spreadsheet, the alumni file with emails and phone
 numbers, and the administrator's address. `firebase.json` excludes that folder, and the
 exclusion is verified after every deploy.
+
+## After every deploy, check nothing private leaked
+
+```
+npm run check
+```
+
+Firebase uploads the whole folder, so the `ignore` list in `firebase.json` is the only thing
+keeping `private/`, `.git/` and the working files off the public web. This command confirms it.

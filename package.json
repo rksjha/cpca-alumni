@@ -5,8 +5,9 @@
   "description": "Offline tests for the portal database security rules",
   "scripts": {
     "test": "firebase emulators:exec --only firestore --project cpca-test \"node tests/rules.test.mjs\"",
-    "deploy": "firebase deploy --only hosting --project cpca-alumni-portal",
-    "deploy:rules": "firebase deploy --only firestore:rules --project cpca-alumni-portal"
+    "deploy": "firebase deploy --only hosting --project cpca-alumni-portal && node scripts/check-deploy.mjs",
+    "deploy:rules": "firebase deploy --only firestore:rules --project cpca-alumni-portal",
+    "check": "node scripts/check-deploy.mjs"
   },
   "dependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
