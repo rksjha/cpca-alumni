@@ -20,6 +20,7 @@
       <form id="email-form"><div class="field"><label for="email">Email address</label><input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></div>
         <button class="btn btn-primary btn-block">Email me a sign-in link</button></form>
       <div id="sent" hidden><div class="banner info">✓ Check your inbox. Open the link we've just emailed you and you'll be signed in — no password needed. (Look in Spam if it hasn't arrived in a minute.)</div></div>
+      <p class="hint center" style="margin-top:16px">Trouble signing in? Write to <a href="mailto:alumnigau@gmail.com?subject=CPCA%20Alumni%20Network%20%E2%80%94%20sign-in%20help">alumnigau@gmail.com</a>.</p>
       <p class="hint center" style="margin-top:16px">Listed among the college's distinguished alumni? Use the same email the college has for you and your ready-made profile is handed to you automatically.</p>
     </div></div>`;
 

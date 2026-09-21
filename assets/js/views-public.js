@@ -178,7 +178,9 @@ CPCA.views = CPCA.views || {};
       <div class="panel"><h2>Your privacy</h2>
         <p><strong>Visible to everyone:</strong> your name, photo, headline, batch, education, career, companies and the links you choose to add.</p>
         <p><strong>Visible to verified alumni only:</strong> your email, phone, WhatsApp number, and your company's staff and turnover figures. You can also make your contact card public, or hide it completely.</p>
-        <p style="margin:0">You can edit or remove any of your details at any time from “My profile”. To have your profile deleted entirely, write to the administrators.</p></div>
+        <p style="margin:0">You can edit or remove any of your details at any time from “My profile”. To have your profile deleted entirely, or to ask anything about your data, write to <a href="mailto:alumnigau@gmail.com?subject=CPCA%20Alumni%20Network%20%E2%80%94%20my%20profile">alumnigau@gmail.com</a>.</p></div>
+      <div class="panel"><h2>Contact</h2>
+        <p style="margin:0">For anything about this network — joining, correcting your profile, privacy, or helping to run it — write to <a href="mailto:alumnigau@gmail.com">alumnigau@gmail.com</a>.</p></div>
       <div class="panel"><h2>Distinguished alumni</h2><p style="margin:0">Profiles marked “Pride of CPCA” were prepared from the college's list of distinguished alumni. If one is yours, sign in with the email address the college holds for you to take it over and keep it current.</p></div>
     </div>`;
   };
