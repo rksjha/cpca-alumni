@@ -128,8 +128,14 @@
             ${field({ name: "full_name", label: "Full name", required: true, max: 120 }, p.full_name)}
             ${field({ name: "batch_year", label: "CPCA pass-out year (batch)", type: "year" }, p.batch_year)}
             ${field({ name: "headline", label: "Headline", max: 200, wide: true, placeholder: "e.g. Seed entrepreneur · Founder, ABC Seeds Pvt. Ltd.", hint: "One line that tells fellow alumni what you do." }, p.headline)}
-            ${field({ name: "location", label: "Current location", max: 200, placeholder: "City, District, State" }, p.location)}
-            ${field({ name: "sector", label: "Main sector of work", type: "select", options: SECTORS.includes(p.sector) || !p.sector ? SECTORS : [p.sector, ...SECTORS] }, p.sector)}
+            ${field({ name: "campus", label: "Your college / campus", type: "select",
+              options: data.CAMPUSES.includes(p.campus) || !p.campus ? data.CAMPUSES : [p.campus, ...data.CAMPUSES],
+              hint: "Where you studied. CPCA alumni: pick C. P. College of Agriculture." }, p.campus)}
+            ${field({ name: "profession", label: "What you do now", type: "select",
+              options: data.PROFESSIONS.includes(p.profession) || !p.profession ? data.PROFESSIONS : [p.profession, ...data.PROFESSIONS] }, p.profession)}
+            ${field({ name: "profession_detail", label: "Your role / designation", max: 120, placeholder: "e.g. Deputy Director of Agriculture" }, p.profession_detail)}
+            ${field({ name: "location", label: "Where you live or work", max: 200, placeholder: "City, State, Country" }, p.location)}
+            ${field({ name: "sector", label: "Sector (for the directory filter)", type: "select", options: SECTORS.includes(p.sector) || !p.sector ? SECTORS : [p.sector, ...SECTORS] }, p.sector)}
             ${field({ name: "about", label: "About you", type: "textarea", max: 3000, wide: true }, p.about)}
           </div><button class="btn btn-primary">Save</button></form>`;
         host.querySelector("#file").onchange = (e) => {
@@ -151,7 +157,7 @@
             { name: "is_cpca", type: "checkbox", label: "This degree is from C. P. College of Agriculture (SDAU)" },
             { name: "level", label: "Degree level", type: "select", options: ["UG", "PG", "PhD", "Diploma", "Other"], required: true },
             { name: "program", label: "Degree & subject", max: 160, placeholder: "e.g. B.Sc. (Hons.) Agriculture" },
-            { name: "college", label: "College", max: 200 }, { name: "institution", label: "University", max: 200 },
+            { name: "college", label: "College / campus", max: 200 }, { name: "institution", label: "University", max: 200 },
             { name: "start_year", label: "Year joined", type: "year" }, { name: "end_year", label: "Pass-out year", type: "year", required: true },
           ],
           title: (r) => esc([r.level, r.program].filter(Boolean).join(" · ") || "Degree") + (r.is_cpca ? ' <span class="chip">CPCA</span>' : ""),
@@ -215,6 +221,7 @@
             ${field({ name: "email", label: "Email", type: "email", max: 200 }, contact.email)}
             ${field({ name: "phone", label: "Phone", type: "tel", max: 40 }, contact.phone)}
             ${field({ name: "whatsapp", label: "WhatsApp number", type: "tel", max: 40 }, contact.whatsapp)}
+            ${field({ name: "dob", label: "Date of birth", max: 30, placeholder: "DD/MM/YYYY", hint: "Never shown publicly — used only so the network can wish you." }, contact.dob)}
             <div class="field"><label for="f-visibility">Who can see these?</label><select name="visibility" id="f-visibility">
               <option value="members" ${contact.visibility === "members" ? "selected" : ""}>Verified CPCA alumni only (recommended)</option>
               <option value="public" ${contact.visibility === "public" ? "selected" : ""}>Everyone on the internet</option>
@@ -228,7 +235,7 @@
           busy(e.submitter, async () => {
             const v = formValues(e.target), links = {};
             LINKS.forEach(([k]) => { if (v["link_" + k]) links[k] = v["link_" + k]; });
-            const card = { email: v.email, phone: v.phone, whatsapp: v.whatsapp, visibility: v.visibility };
+            const card = { email: v.email, phone: v.phone, whatsapp: v.whatsapp, dob: v.dob, visibility: v.visibility };
             await data.saveContact(p.id, card); await data.saveProfile(p.id, { links });
             Object.assign(contact, card); p.links = links; toast("Saved");
           });

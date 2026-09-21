@@ -12,6 +12,26 @@ CPCA.data = (function () {
     auth.useDeviceLanguage();
   }
 
+  // Campuses people named in the 2025 questionnaire, so alumni of every GAU/SDAU college fit.
+  const CAMPUSES = [
+    "C. P. College of Agriculture (CPCA), Sardarkrushinagar",
+    "B. A. College of Agriculture (BACA), Anand",
+    "ASPEE College of Horticulture & Forestry (ACHF), Navsari",
+    "College of Agricultural Engineering & Technology (CAET)",
+    "College of Agriculture, Tharad", "College of Agriculture, Bhuj",
+    "College of Horticulture, Jagudan", "College of Food Technology",
+    "College of Agribusiness Management", "ASPEE College of Nutrition & Community Science",
+    "Sardarkrushinagar Dantiwada Agricultural University (SDAU)",
+    "Navsari Agricultural University (NAU)", "Junagadh Agricultural University (JAU)",
+    "Anand Agricultural University (AAU)", "Gujarat Agricultural University (GAU)",
+    "Other campus",
+  ];
+  // What alumni actually answered: 72 in government service, 23 private sector, 20 in business.
+  const PROFESSIONS = [
+    "Government Service", "Private Sector", "Self Employed / Business", "Farming",
+    "Banking & Finance", "Research & Academia", "NGO / Development Sector",
+    "Student", "Retired", "Other",
+  ];
   const CPCA_COLLEGE = "C. P. College of Agriculture";
   const SDAU = "Sardarkrushinagar Dantiwada Agricultural University (SDAU)";
   const EMAIL_KEY = "cpca_signin_email"; // remembers the address between sending and opening the link
@@ -30,9 +50,11 @@ CPCA.data = (function () {
       id, user_id: d.userId || null, full_name: d.fullName || "", headline: d.headline || "", about: d.about || null,
       photo_url: d.photoUrl || null, location: d.location || null, sector: d.sector || null,
       batch_year: d.batchYear || null, links: d.links || {}, status: d.status || "pending",
+      campus: d.campus || null, profession: d.profession || null, profession_detail: d.professionDetail || null,
+      source: d.source || null,
       is_distinguished: Boolean(d.isDistinguished),
       education: (d.education || []).map((e, i) => ({ id: "e" + i, level: e.level || null, program: e.program || null,
-        institution: e.institution || null, college: e.college || null, start_year: e.startYear || null,
+        institution: e.institution || null, college: e.college || e.campus || null, start_year: e.startYear || null,
         end_year: e.endYear || null, is_cpca: Boolean(e.isCpca) })),
       experience: (d.experience || []).map((x, i) => ({ id: "x" + i, organisation: x.organisation || "", title: x.title || null,
         location: x.location || null, start_year: x.startYear || null, end_year: x.endYear || null,
@@ -42,7 +64,8 @@ CPCA.data = (function () {
         year_established: c.yearEstablished || null,
         company_stats: stats[i] ? { employees: stats[i].employees || null, turnover: stats[i].turnover || null } : null })),
       profile_private: contact ? { email: contact.email || null, phone: contact.phone || null,
-        whatsapp: contact.whatsapp || null, visibility: contact.visibility || "members" } : null,
+        whatsapp: contact.whatsapp || null, dob: contact.dob || null,
+        visibility: contact.visibility || "members", association: contact.association || null } : null,
     };
   }
   const eduToDb = (r) => clean({ level: r.level, program: r.program, institution: r.institution, college: r.college,
@@ -74,6 +97,7 @@ CPCA.data = (function () {
       const d = doc.data();
       return { id: doc.id, full_name: d.fullName || "", headline: d.headline || "", photo_url: d.photoUrl || null,
         location: d.location || null, sector: d.sector || null, batch_year: d.batchYear || null,
+        campus: d.campus || null, profession: d.profession || null,
         is_distinguished: Boolean(d.isDistinguished), companies: (d.companies || []).map((c) => ({ name: c.name })) };
     }).sort((a, b) => a.full_name.localeCompare(b.full_name));
   }
@@ -168,7 +192,8 @@ CPCA.data = (function () {
 
   // ── Writing (own profile only; the rules enforce this) ──
   const FIELD_MAP = { full_name: "fullName", headline: "headline", about: "about", photo_url: "photoUrl",
-    location: "location", sector: "sector", batch_year: "batchYear", links: "links" };
+    location: "location", sector: "sector", batch_year: "batchYear", links: "links",
+    campus: "campus", profession: "profession", profession_detail: "professionDetail" };
   async function saveProfile(id, fields) {
     const out = { updatedAt: Date.now() };
     Object.keys(fields).forEach((k) => { if (FIELD_MAP[k]) out[FIELD_MAP[k]] = fields[k]; });
@@ -247,6 +272,7 @@ CPCA.data = (function () {
       try { const c = await doc.ref.collection("private").doc("contact").get(); if (c.exists) contact = c.data(); } catch (e) { /* ignore */ }
       return { id: doc.id, full_name: d.fullName || "", status: d.status || "pending",
         is_distinguished: Boolean(d.isDistinguished), batch_year: d.batchYear || null,
+        campus: d.campus || null, profession: d.profession || null, source: d.source || null,
         created_at: d.createdAt || Date.now(), user_id: d.userId || null,
         profile_private: contact ? { email: contact.email || null, phone: contact.phone || null } : null,
         education: (d.education || []).map((e) => ({ level: e.level, program: e.program, end_year: e.endYear, is_cpca: Boolean(e.isCpca) })) };
@@ -295,8 +321,46 @@ CPCA.data = (function () {
     return { added, skipped };
   }
 
+  // People who answered the 2025 questionnaire. They gave their details to help form the alumni
+  // body — NOT to be published — so each profile is created hidden ("pending") and appears only
+  // once that person signs in with the same address and an administrator approves them.
+  async function adminImportRespondents(people, onProgress) {
+    let added = 0, skipped = 0;
+    for (const p of people) {
+      const emailAddr = (p.email || "").toLowerCase();
+      if (!emailAddr || !p.full_name) { skipped++; continue; }
+      const existing = await db.collection("claims").doc(emailAddr).get();
+      if (existing.exists) { skipped++; if (onProgress) onProgress(added, skipped, p.full_name); continue; }
+
+      const ref = db.collection("profiles").doc();
+      await ref.set(clean({
+        userId: null, fullName: p.full_name, headline: p.profession_detail || p.profession || "",
+        location: [p.city, p.country].filter(Boolean).join(", ") || null,
+        campus: p.campus || null, profession: p.profession || null, professionDetail: p.profession_detail || null,
+        batchYear: p.batch_year || null,
+        links: p.linkedin ? { linkedin: p.linkedin } : {},
+        education: (p.education || []).map((e) => clean({
+          level: e.level, program: e.program, college: e.campus,
+          institution: null, endYear: e.end_year, isCpca: Boolean(e.is_cpca) })),
+        experience: [], companies: [],
+        status: "pending", isDistinguished: false,
+        source: p.source || "questionnaire",
+        createdAt: Date.now(), updatedAt: Date.now(), importedAt: Date.now(),
+      }));
+      await ref.collection("private").doc("contact").set(clean({
+        email: emailAddr, phone: p.phone || null, whatsapp: p.phone || null,
+        dob: p.dob || null, visibility: "members", stats: [],
+        association: p.association || null,
+      }));
+      await db.collection("claims").doc(emailAddr).set({ profileId: ref.id, addedAt: Date.now() });
+      added++;
+      if (onProgress) onProgress(added, skipped, p.full_name);
+    }
+    return { added, skipped };
+  }
+
   return {
-    live, one, CPCA_COLLEGE, SDAU, listProfiles, getProfile,
+    live, one, CPCA_COLLEGE, SDAU, CAMPUSES, PROFESSIONS, listProfiles, getProfile, adminImportRespondents,
     ready, getUser, onAuthChange, signInWith, sendEmailCode, signOut, isEmailLink,
     joinNetwork, isAdmin, saveProfile, saveContact, saveRow, deleteRow, saveCompany, uploadPhoto,
     adminListMembers, adminSetStatus, adminSetDistinguished, adminListEmails, adminAddEmail, adminRemoveEmail, adminImport,

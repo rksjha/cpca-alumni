@@ -38,13 +38,32 @@
       const by = (s) => members.filter((m) => m.status === s);
       app.innerHTML = `<div class="wrap" style="padding-top:40px;padding-bottom:64px">
         <h1 style="font-size:2.2rem">Administrator desk</h1>
-        ${section("Waiting for approval", by("pending"), "Nobody is waiting. New joiners will appear here.")}
+        ${section("Waiting for approval", by("pending").filter((m) => m.user_id),
+            "Nobody is waiting. When someone signs in and adds their CPCA degree, they appear here.")}
+        ${(() => {
+          const invited = by("pending").filter((m) => !m.user_id);
+          if (!invited.length) return "";
+          const campuses = [...new Set(invited.map((m) => m.campus).filter(Boolean))];
+          return `<div class="panel"><h2>Invited, not yet claimed (${invited.length})</h2>
+            <p class="small muted">Prepared from the 2025 questionnaire. These profiles are <strong>hidden from the public</strong>. When one of these alumni signs in with the same email address, their details are waiting for them — then they appear above for your approval.${campuses.length ? ` Colleges represented: ${campuses.length}.` : ""}</p>
+            <details><summary class="small" style="cursor:pointer">Show the list</summary>
+              <div class="table-scroll" style="margin-top:12px"><table><thead><tr><th>Name</th><th>College / campus</th><th>Profession</th><th>Batch</th></tr></thead><tbody>
+              ${invited.map((m) => `<tr><td><strong>${esc(m.full_name)}</strong><div class="small muted">${esc((m.profile_private || {}).email || "")}</div></td>
+                <td class="small">${esc(m.campus || "—")}</td><td class="small">${esc(m.profession || "—")}</td><td class="small">${esc(m.batch_year || "—")}</td></tr>`).join("")}
+              </tbody></table></div></details></div>`;
+        })()}
         ${section("Approved members", by("approved"), "No approved members yet.")}
         ${by("suspended").length ? section("Suspended / rejected", by("suspended"), "") : ""}
         <div class="panel"><h2>Import the college's list</h2>
           <p class="small muted">Choose the alumni file prepared for this portal (<code>seed_alumni.json</code>). Each alumnus is added as an approved “Pride of CPCA” profile that they can later claim with their own email address. Anyone already imported is skipped, so running it twice is safe. The file stays on your computer — only the profiles go to the portal.</p>
           <label class="btn btn-primary btn-sm" style="display:inline-flex">Choose file and import<input type="file" id="import-file" accept="application/json,.json" hidden></label>
           <div id="import-log" class="small muted" style="margin-top:12px"></div>
+        </div>
+
+        <div class="panel"><h2>Import questionnaire replies</h2>
+          <p class="small muted">Choose <code>seed_respondents.json</code> — the people who answered the alumni-body questionnaire. Each is added as a <strong>hidden</strong> profile that only they can claim, by signing in with the same email address. Nothing appears publicly until they claim it and you approve them. Running it twice is safe.</p>
+          <label class="btn btn-ghost btn-sm" style="display:inline-flex">Choose file and import<input type="file" id="import-resp" accept="application/json,.json" hidden></label>
+          <div id="import-resp-log" class="small muted" style="margin-top:12px"></div>
         </div>
 
         <div class="panel"><h2>Administrators</h2><p class="small muted">People who sign in with these email addresses can approve members and manage this list.</p>
@@ -79,6 +98,30 @@
           });
           log.textContent = `Finished: ${result.added} added, ${result.skipped} already present.`;
           toast(`Imported ${result.added} alumni`);
+          const fresh = await data.adminListMembers();
+          fresh.forEach((m) => (m.profile_private = data.one(m.profile_private)));
+          members.length = 0; members.push(...fresh); render();
+        } catch (err) {
+          console.error(err);
+          log.textContent = "Import failed: " + (err.message || err);
+          toast("Import failed — " + (err.message || err), true);
+        } finally { e.target.value = ""; }
+      };
+      app.querySelector("#import-resp").onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const log = app.querySelector("#import-resp-log");
+        try {
+          const parsed = JSON.parse(await file.text());
+          const people = Array.isArray(parsed) ? parsed : parsed.people;
+          if (!Array.isArray(people) || !people.length) throw new Error("That file has no people in it.");
+          if (!confirm(`Add ${people.length} questionnaire replies as hidden, claimable profiles?`)) return;
+          log.textContent = "Importing…";
+          const result = await data.adminImportRespondents(people, (added, skipped, name) => {
+            log.textContent = `Added ${added}, skipped ${skipped} — ${name}`;
+          });
+          log.textContent = `Finished: ${result.added} added, ${result.skipped} already present.`;
+          toast(`${result.added} profiles ready to be claimed`);
           const fresh = await data.adminListMembers();
           fresh.forEach((m) => (m.profile_private = data.one(m.profile_private)));
           members.length = 0; members.push(...fresh); render();

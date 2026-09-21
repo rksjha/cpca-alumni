@@ -59,6 +59,8 @@ CPCA.views = CPCA.views || {};
   // ── Directory ──
   CPCA.views.directory = async function (app) {
     const people = await data.listProfiles();
+    const professions = [...new Set(people.map((p) => p.profession).filter(Boolean))].sort();
+    const campuses = [...new Set(people.map((p) => p.campus).filter(Boolean))].sort();
     const sectors = [...new Set(people.map((p) => p.sector).filter(Boolean))].sort();
     const decades = [...new Set(people.map((p) => p.batch_year && Math.floor(p.batch_year / 10) * 10).filter(Boolean))].sort();
 
@@ -67,9 +69,11 @@ CPCA.views = CPCA.views || {};
       <p class="muted">Search by name, company, place or line of work.</p>
       <div class="toolbar">
         <input class="grow" id="q" type="search" placeholder="Search alumni…" aria-label="Search alumni">
-        <select id="f-sector" aria-label="Sector"><option value="">All sectors</option>${sectors.map((s) => `<option>${esc(s)}</option>`).join("")}</select>
+        <select id="f-profession" aria-label="What they do"><option value="">All professions</option>${professions.map((s) => `<option>${esc(s)}</option>`).join("")}</select>
         <select id="f-decade" aria-label="Batch"><option value="">All batches</option>${decades.map((d) => `<option value="${d}">${d}s</option>`).join("")}</select>
         <select id="f-sort" aria-label="Sort"><option value="name">Sort: Name</option><option value="new">Newest batch first</option><option value="old">Oldest batch first</option></select>
+        ${campuses.length > 1 ? `<select id="f-campus" class="grow" aria-label="College or campus"><option value="">All colleges &amp; campuses</option>${campuses.map((c) => `<option>${esc(c)}</option>`).join("")}</select>` : ""}
+        ${sectors.length ? `<select id="f-sector" class="grow" aria-label="Sector"><option value="">All sectors</option>${sectors.map((s) => `<option>${esc(s)}</option>`).join("")}</select>` : ""}
       </div>
       <p class="small muted" id="count"></p>
       <div class="cards" id="results"></div>
@@ -77,13 +81,17 @@ CPCA.views = CPCA.views || {};
 
     const $ = (id) => app.querySelector(id);
     function render() {
+      const val = (id) => ($(id) ? $(id).value : "");
       const q = $("#q").value.trim().toLowerCase();
-      const sector = $("#f-sector").value, decade = Number($("#f-decade").value), sort = $("#f-sort").value;
+      const profession = val("#f-profession"), campus = val("#f-campus"), sector = val("#f-sector");
+      const decade = Number($("#f-decade").value), sort = $("#f-sort").value;
       let list = people.filter((p) => {
+        if (profession && p.profession !== profession) return false;
+        if (campus && p.campus !== campus) return false;
         if (sector && p.sector !== sector) return false;
         if (decade && Math.floor((p.batch_year || 0) / 10) * 10 !== decade) return false;
         if (!q) return true;
-        const hay = [p.full_name, p.headline, p.location, p.sector, p.batch_year, ...(p.companies || []).map((c) => c.name)].join(" ").toLowerCase();
+        const hay = [p.full_name, p.headline, p.location, p.sector, p.profession, p.campus, p.batch_year, ...(p.companies || []).map((c) => c.name)].join(" ").toLowerCase();
         return q.split(/\s+/).every((word) => hay.includes(word));
       });
       if (sort === "new") list.sort((a, b) => (b.batch_year || 0) - (a.batch_year || 0));
@@ -92,7 +100,7 @@ CPCA.views = CPCA.views || {};
       $("#count").textContent = `${list.length} of ${people.length} alumni`;
       $("#results").innerHTML = list.map(personCard).join("") || '<div class="empty" style="grid-column:1/-1">No alumni match that search. Try fewer words.</div>';
     }
-    ["#q", "#f-sector", "#f-decade", "#f-sort"].forEach((id) => $(id).addEventListener("input", render));
+    ["#q", "#f-profession", "#f-campus", "#f-sector", "#f-decade", "#f-sort"].forEach((id) => { if ($(id)) $(id).addEventListener("input", render); });
     render();
   };
 
@@ -126,6 +134,8 @@ CPCA.views = CPCA.views || {};
             <div class="links">
               ${p.is_distinguished ? '<span class="chip gold">★ Pride of CPCA</span>' : ""}
               ${p.batch_year ? `<span class="chip">Batch of ${esc(p.batch_year)}</span>` : ""}
+              ${p.profession ? `<span class="chip">${esc(p.profession_detail || p.profession)}</span>` : ""}
+              ${p.campus ? `<span class="chip">${esc(p.campus)}</span>` : ""}
               ${p.sector ? `<span class="chip">${esc(p.sector)}</span>` : ""}
               ${p.location ? `<span class="chip grey">📍 ${esc(p.location)}</span>` : ""}
               ${p.status !== "approved" ? `<span class="chip warn">${esc(p.status)} — visible only to you and admins</span>` : ""}

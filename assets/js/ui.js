@@ -37,6 +37,7 @@ CPCA.ui = (function () {
       <div class="headline">${esc(p.headline)}</div>
       <div class="meta">
         ${p.is_distinguished ? '<span class="chip gold">★ Pride of CPCA</span>' : ""}
+        ${p.profession ? `<span class="chip">${esc(p.profession)}</span>` : ""}
         ${p.batch_year ? `<span class="chip">Batch ${esc(p.batch_year)}</span>` : ""}
         ${p.location ? `<span class="chip grey">${esc(p.location.split(",").slice(-2).join(",").trim())}</span>` : ""}
       </div></a>`;
