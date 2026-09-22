@@ -207,3 +207,12 @@ function testConnection() {
   Logger.log(msg);
   return msg;
 }
+
+/** One-off check: emails only this portal's own address, never the members. */
+function sendTestToSelf() {
+  sendMail_(SUPPORT, 'Test — the CPCA Alumni mailer is working',
+    SHELL('The mailer is connected',
+      '<p>This is a test sent from the portal to itself. If you can read this, announcements and the weekly profile reminders will reach members correctly.</p>',
+      'Open the portal'));
+  return 'sent to ' + SUPPORT;
+}
