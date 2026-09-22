@@ -38,8 +38,22 @@
       const by = (s) => members.filter((m) => m.status === s);
       app.innerHTML = `<div class="wrap" style="padding-top:40px;padding-bottom:64px">
         <h1 style="font-size:2.2rem">Administrator desk</h1>
-        ${section("Waiting for approval", by("pending").filter((m) => m.user_id),
-            "Nobody is waiting. When someone signs in and adds their CPCA degree, they appear here.")}
+        ${(() => {
+          const waiting = by("pending").filter((m) => m.user_id);
+          if (!waiting.length) return section("Waiting for approval", [], "Nobody is waiting. When someone signs in and adds their CPCA degree, they appear here.");
+          const withDegree = waiting.filter((m) => (m.education || []).some((e) => e.is_cpca));
+          const blank = waiting.filter((m) => !(m.education || []).length && !m.campus && !m.profession);
+          return `<div class="panel"><h2>Waiting for approval (${waiting.length})</h2>
+            <p class="small muted">These people have signed in and are waiting for you. Until you approve them they do not appear in the directory.
+              <strong>${withDegree.length}</strong> have entered a degree; <strong>${blank.length}</strong> have filled in nothing yet.</p>
+            <div class="links" style="margin-bottom:14px">
+              <button class="btn btn-primary btn-sm" data-bulk="degree">Approve the ${withDegree.length} with a stated degree</button>
+              <button class="btn btn-ghost btn-sm" data-bulk="all">Approve all ${waiting.length}</button>
+              <span class="small muted" id="bulk-log"></span>
+            </div>
+            <div class="table-scroll"><table><thead><tr><th>Member</th><th>Degree stated</th><th>Joined</th><th>Action</th></tr></thead>
+              <tbody>${waiting.map(memberRow).join("")}</tbody></table></div></div>`;
+        })()}
         ${(() => {
           const invited = by("pending").filter((m) => !m.user_id);
           if (!invited.length) return "";
@@ -107,6 +121,18 @@
           toast("Import failed — " + (err.message || err), true);
         } finally { e.target.value = ""; }
       };
+      app.querySelectorAll("[data-bulk]").forEach((b) => (b.onclick = () => {
+        const waiting = members.filter((m) => m.status === "pending" && m.user_id);
+        const chosen = b.dataset.bulk === "degree" ? waiting.filter((m) => (m.education || []).some((e) => e.is_cpca)) : waiting;
+        if (!chosen.length) { toast("Nobody matches that", true); return; }
+        if (!confirm(`Approve ${chosen.length} member${chosen.length > 1 ? "s" : ""}? They will appear in the public directory.`)) return;
+        const log = app.querySelector("#bulk-log");
+        busy(b, async () => {
+          await data.adminApproveMany(chosen.map((m) => m.id), (done, total) => (log.textContent = `${done} of ${total}…`));
+          chosen.forEach((m) => (m.status = "approved"));
+          toast(`${chosen.length} members approved`); render();
+        });
+      }));
       app.querySelector("#import-resp").onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;

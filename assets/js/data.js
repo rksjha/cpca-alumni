@@ -359,8 +359,83 @@ CPCA.data = (function () {
     return { added, skipped };
   }
 
+  // ── Announcements: a noticeboard anyone can read, written by administrators ──
+  async function listAnnouncements() {
+    if (!live) return [];
+    const snap = await db.collection("announcements").orderBy("createdAt", "desc").limit(50).get();
+    return snap.docs.map((d) => ({ id: d.id, title: d.data().title || "", body: d.data().body || "",
+      authorName: d.data().authorName || null, created_at: d.data().createdAt || null, emailed: Boolean(d.data().emailQueuedAt) }));
+  }
+  async function postAnnouncement({ title, body, email }) {
+    const user = auth.currentUser;
+    const ref = await db.collection("announcements").add(clean({
+      title: title.slice(0, 140), body: body.slice(0, 8000),
+      authorName: user.displayName || user.email, authorEmail: user.email,
+      createdAt: Date.now(), emailQueuedAt: email ? Date.now() : null, emailSentAt: null,
+    }));
+    return Boolean(email) && Boolean(ref.id);
+  }
+  const deleteAnnouncement = (id) => db.collection("announcements").doc(id).delete();
+
+  // ── Chat rooms ──
+  const MAX_ROOMS = 50;
+  async function myMembership() {
+    const user = live && auth.currentUser;
+    if (!user) return null;
+    const m = await db.collection("members").doc(user.uid).get();
+    if (!m.exists) return null;
+    const p = await db.collection("profiles").doc(m.data().profileId).get();
+    if (!p.exists) return null;
+    return { profileId: p.id, status: p.data().status, fullName: p.data().fullName || "" };
+  }
+  async function listRooms() {
+    const snap = await db.collection("rooms").orderBy("lastAt", "desc").limit(MAX_ROOMS).get();
+    return snap.docs.map((d) => ({ id: d.id, name: d.data().name || "", kind: d.data().kind || null,
+      description: d.data().description || null, message_count: d.data().messageCount || 0, last_at: d.data().lastAt || null }));
+  }
+  async function getRoom(id) {
+    const d = await db.collection("rooms").doc(id).get();
+    return d.exists ? { id: d.id, name: d.data().name, kind: d.data().kind, description: d.data().description } : null;
+  }
+  async function createRoom({ name, kind, description }) {
+    const existing = await db.collection("rooms").get();
+    if (existing.size >= MAX_ROOMS) throw new Error(`The limit of ${MAX_ROOMS} rooms has been reached. Delete one first.`);
+    await db.collection("rooms").add(clean({ name: name.slice(0, 80), kind, description: description || null,
+      createdAt: Date.now(), lastAt: Date.now(), messageCount: 0, createdBy: auth.currentUser.email }));
+  }
+  // Live updates: the page redraws by itself when anyone in the room posts.
+  function watchMessages(roomId, onChange, onError) {
+    return db.collection("rooms").doc(roomId).collection("messages")
+      .orderBy("createdAt", "asc").limitToLast(300)
+      .onSnapshot((snap) => onChange(snap.docs.map((d) => ({ id: d.id, text: d.data().text || "",
+        author_id: d.data().authorId, author_name: d.data().authorName || "Member", created_at: d.data().createdAt }))),
+        (e) => onError && onError(e));
+  }
+  async function sendMessage(roomId, text) {
+    const me = await myMembership();
+    if (!me || me.status !== "approved") throw new Error("Only verified members can post.");
+    const roomRef = db.collection("rooms").doc(roomId);
+    await roomRef.collection("messages").add({ text: text.slice(0, 2000), authorId: auth.currentUser.uid,
+      authorName: me.fullName || auth.currentUser.displayName || "Member", createdAt: Date.now() });
+    await roomRef.update({ lastAt: Date.now(), messageCount: firebase.firestore.FieldValue.increment(1) }).catch(() => {});
+  }
+  const deleteMessage = (roomId, id) => db.collection("rooms").doc(roomId).collection("messages").doc(id).delete();
+
+  // ── Approving members in bulk, so a backlog can be cleared in one go ──
+  async function adminApproveMany(ids, onProgress) {
+    let done = 0;
+    for (const id of ids) {
+      await db.collection("profiles").doc(id).update({ status: "approved", updatedAt: Date.now() });
+      done++;
+      if (onProgress) onProgress(done, ids.length);
+    }
+    return done;
+  }
+
   return {
-    live, one, CPCA_COLLEGE, SDAU, CAMPUSES, PROFESSIONS, listProfiles, getProfile, adminImportRespondents,
+    live, one, CPCA_COLLEGE, SDAU, CAMPUSES, PROFESSIONS, MAX_ROOMS, listProfiles, getProfile, adminImportRespondents,
+    listAnnouncements, postAnnouncement, deleteAnnouncement,
+    myMembership, listRooms, getRoom, createRoom, watchMessages, sendMessage, deleteMessage, adminApproveMany,
     ready, getUser, onAuthChange, signInWith, sendEmailCode, signOut, isEmailLink,
     joinNetwork, isAdmin, saveProfile, saveContact, saveRow, deleteRow, saveCompany, uploadPhoto,
     adminListMembers, adminSetStatus, adminSetDistinguished, adminListEmails, adminAddEmail, adminRemoveEmail, adminImport,

@@ -3,7 +3,7 @@
   const data = CPCA.data;
   const app = document.getElementById("app");
   const ctx = { user: null, isAdmin: false };
-  const ROUTES = { "": "home", directory: "directory", alumni: "profile", join: "join", me: "me", admin: "admin", about: "about", college: "college" };
+  const ROUTES = { "": "home", directory: "directory", alumni: "profile", join: "join", me: "me", admin: "admin", about: "about", college: "college", news: "news", rooms: "rooms", room: "room" };
 
   async function refreshSession() {
     ctx.user = data.getUser();
@@ -19,6 +19,7 @@
     const view = ROUTES[name] || "home";
     const mine = ++navigation;
     document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("active", a.dataset.nav === name));
+    if (CPCA.onLeaveView) { try { CPCA.onLeaveView(); } catch (e) { /* ignore */ } CPCA.onLeaveView = null; }
     app.innerHTML = '<div class="spinner" role="status" aria-label="Loading"></div>';
     window.scrollTo(0, 0);
     try {

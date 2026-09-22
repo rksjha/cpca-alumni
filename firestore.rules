@@ -90,6 +90,34 @@ service cloud.firestore {
       allow write:  if isAdmin();
     }
 
+    // ── Announcements: anyone may read the noticeboard; only administrators write ──
+    match /announcements/{id} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Chat rooms: for approved members only. Administrators open and close rooms. ──
+    match /rooms/{roomId} {
+      allow read: if isMember() || isAdmin();
+      allow create, delete: if isAdmin();
+      // members may only bump the room's activity counters, never rename or re-describe it
+      allow update: if isAdmin()
+                    || (isMember()
+                        && request.resource.data.name == resource.data.name
+                        && request.resource.data.kind == resource.data.kind);
+
+      match /messages/{messageId} {
+        allow read: if isMember() || isAdmin();
+        allow create: if isMember()
+                      && request.resource.data.authorId == request.auth.uid
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() > 0
+                      && request.resource.data.text.size() <= 2000;
+        allow update: if false;                       // messages are never edited after posting
+        allow delete: if isAdmin() || (isMember() && resource.data.authorId == request.auth.uid);
+      }
+    }
+
     match /{document=**} { allow read, write: if false; }
   }
 }

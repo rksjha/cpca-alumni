@@ -35,9 +35,16 @@ async function seed() {
     await setDoc(doc(db, "profiles/member1"), { fullName: "Verified Member", status: "approved", isDistinguished: false, userId: "memberUid" });
     await setDoc(doc(db, "members/memberUid"), { profileId: "member1" });
     await setDoc(doc(db, "members/pendingUid"), { profileId: "pending1" });
+    // a second joiner who is never approved during these tests, so chat-room checks stay honest
+    await setDoc(doc(db, "profiles/pending2"), { fullName: "Still Waiting", status: "pending", isDistinguished: false, userId: "pendingUid2" });
+    await setDoc(doc(db, "members/pendingUid2"), { profileId: "pending2" });
     // a college-listed profile waiting to be claimed
     await setDoc(doc(db, "profiles/seeded1"), { fullName: "Listed Alumnus", status: "approved", isDistinguished: true, userId: null });
     await setDoc(doc(db, "claims", SEEDED_EMAIL), { profileId: "seeded1" });
+    // a chat room with one message from the member and one from somebody else
+    await setDoc(doc(db, "rooms/r1"), { name: "Batch of 2004", kind: "Batch", messageCount: 0 });
+    await setDoc(doc(db, "rooms/r1/messages/m1"), { text: "hello", authorId: "memberUid", authorName: "Verified Member", createdAt: 1 });
+    await setDoc(doc(db, "rooms/r1/messages/m5"), { text: "theirs", authorId: "otherUid", authorName: "Other", createdAt: 5 });
   });
 }
 
@@ -106,6 +113,30 @@ await it("can import a profile and its claim key", async () => {
 await it("can appoint another administrator", () => assertSucceeds(setDoc(doc(admin(), "admins", "second@example.com"), { role: "administrator" })));
 await it("an administrator with an UNVERIFIED email gets nothing", () =>
   assertFails(updateDoc(doc(asUser("adminUid", ADMIN_EMAIL, false), "profiles/approved1"), { status: "suspended" })));
+
+console.log("\nAnnouncements");
+await it("anyone can read the noticeboard", () => assertSucceeds(getDoc(doc(stranger(), "announcements/x"))));
+await it("a stranger cannot post one", () => assertFails(setDoc(doc(stranger(), "announcements/x"), { title: "Fake", body: "b" })));
+await it("an ordinary member cannot post one", () => assertFails(setDoc(doc(member(), "announcements/y"), { title: "Fake", body: "b" })));
+await it("an administrator can post one", () => assertSucceeds(setDoc(doc(admin(), "announcements/z"), { title: "Notice", body: "b", createdAt: 1 })));
+
+console.log("\nChat rooms");
+await it("a stranger cannot read a room", () => assertFails(getDoc(doc(stranger(), "rooms/r1"))));
+await it("a stranger cannot read its messages", () => assertFails(getDoc(doc(stranger(), "rooms/r1/messages/m1"))));
+await it("someone not yet approved cannot read messages", () => assertFails(getDoc(doc(asUser("pendingUid2", "waiting@example.com"), "rooms/r1/messages/m1"))));
+await it("someone not yet approved cannot read the room", () => assertFails(getDoc(doc(asUser("pendingUid2", "waiting@example.com"), "rooms/r1"))));
+await it("someone not yet approved cannot post", () => assertFails(setDoc(doc(asUser("pendingUid2", "waiting@example.com"), "rooms/r1/messages/m9"), { text: "hi", authorId: "pendingUid2", authorName: "W", createdAt: 9 })));
+await it("a verified member CAN read messages", () => assertSucceeds(getDoc(doc(member(), "rooms/r1/messages/m1"))));
+await it("a verified member can post a message", () => assertSucceeds(setDoc(doc(member(), "rooms/r1/messages/m2"), { text: "hi", authorId: "memberUid", authorName: "Verified Member", createdAt: 2 })));
+await it("but cannot post one under somebody else's name", () => assertFails(setDoc(doc(member(), "rooms/r1/messages/m3"), { text: "hi", authorId: "someoneElse", authorName: "X", createdAt: 3 })));
+await it("cannot post an empty message", () => assertFails(setDoc(doc(member(), "rooms/r1/messages/m4"), { text: "", authorId: "memberUid", authorName: "V", createdAt: 4 })));
+await it("cannot edit a message after posting", () => assertFails(updateDoc(doc(member(), "rooms/r1/messages/m1"), { text: "changed" })));
+await it("can delete their own message", () => assertSucceeds(deleteDoc(doc(member(), "rooms/r1/messages/m2"))));
+await it("cannot delete somebody else's", () => assertFails(deleteDoc(doc(member(), "rooms/r1/messages/m5"))));
+await it("an administrator can delete any message", () => assertSucceeds(deleteDoc(doc(admin(), "rooms/r1/messages/m5"))));
+await it("a member cannot rename a room", () => assertFails(updateDoc(doc(member(), "rooms/r1"), { name: "Hijacked" })));
+await it("a member cannot create a room", () => assertFails(setDoc(doc(member(), "rooms/r2"), { name: "Mine", kind: "Batch" })));
+await it("an administrator can create a room", () => assertSucceeds(setDoc(doc(admin(), "rooms/r3"), { name: "Seeds", kind: "Subject / Discipline", messageCount: 0 })));
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 await env.cleanup();
