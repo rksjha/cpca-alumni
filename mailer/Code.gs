@@ -123,11 +123,14 @@ const escapeHtml_ = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, 
 
 // ── Job 1: email each new announcement ───────────────────────────────────────
 function sendQueuedAnnouncements() {
+  // Read the newest announcements and pick the unsent ones here. (Firestore's REST API needs a
+  // special "is null" filter for null fields, and getting that subtly wrong silently matches
+  // nothing — filtering in code is plainer and cannot fail quietly.)
   const queued = query_({ structuredQuery: {
     from: [{ collectionId: 'announcements' }],
-    where: { fieldFilter: { field: { fieldPath: 'emailSentAt' }, op: 'EQUAL', value: { nullValue: null } } },
-    limit: 5,
-  } }).filter(function (a) { return a.emailQueuedAt; });
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    limit: 20,
+  } }).filter(function (a) { return a.emailQueuedAt && !a.emailSentAt; }).slice(0, 5);
 
   if (!queued.length) return 'nothing queued';
   const members = approvedMembers_();
