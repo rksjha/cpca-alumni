@@ -194,7 +194,8 @@ function setUpTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('sendQueuedAnnouncements').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('sendWeeklyReminders').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(10).create();
-  return 'Triggers set: announcements every 10 minutes, reminders every Tuesday at 10am.';
+  ScriptApp.newTrigger('sendPendingNudge').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(10).create();
+  return 'Triggers set: announcements every 10 minutes, profile reminders Tuesdays, nudges to people awaiting approval Fridays.';
 }
 
 /** Safe check — reads the database and counts recipients, sends nothing. */
@@ -206,6 +207,63 @@ function testConnection() {
             + MailApp.getRemainingDailyQuota() + '.';
   Logger.log(msg);
   return msg;
+}
+
+// ── Job 3: the people stuck before approval ─────────────────────────────────
+/**
+ * Everyone who has signed in but is still waiting for approval — usually because they never
+ * said which college and batch they belong to, which is what an administrator checks.
+ * The weekly reminder deliberately skips these people (it only emails approved members),
+ * so they need their own note.
+ */
+function pendingMembers_() {
+  const profiles = query_({ structuredQuery: {
+    from: [{ collectionId: 'profiles' }],
+    where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'pending' } } },
+    limit: 2000,
+  } }).filter(function (p) { return p.userId; });   // only people who actually signed in
+
+  const out = [];
+  for (let i = 0; i < profiles.length; i += 50) {
+    const slice = profiles.slice(i, i + 50);
+    const responses = UrlFetchApp.fetchAll(slice.map(function (p) {
+      return { url: BASE + '/profiles/' + p._id + '/private/contact', headers: authHeaders_(), muteHttpExceptions: true };
+    }));
+    responses.forEach(function (res, n) {
+      if (res.getResponseCode() !== 200) return;
+      const c = docFields_(JSON.parse(res.getContentText()));
+      if (c.email && c.email.indexOf('@') > 0) {
+        out.push({ id: slice[n]._id, name: slice[n].fullName || 'Alumnus',
+                   email: String(c.email).trim().toLowerCase(), profile: slice[n], lastNudgeAt: c.lastNudgeAt || 0 });
+      }
+    });
+  }
+  const seen = {};
+  return out.filter(function (m) { if (seen[m.email]) return false; seen[m.email] = 1; return true; });
+}
+
+function sendPendingNudge() {
+  const now = Date.now(), gap = REMINDER_GAP_DAYS * 86400000;
+  const due = pendingMembers_().filter(function (m) { return (now - (m.lastNudgeAt || 0)) > gap; }).slice(0, DAILY_CAP);
+  let sent = 0;
+  due.forEach(function (m) {
+    const body = '<p>Thank you for joining the CPCA Alumni Network. Your profile is not in the directory yet, '
+      + 'because we still need one thing from you:</p>'
+      + '<p style="background:#f6edcf;padding:14px;border-radius:10px;margin:14px 0">'
+      + '<strong>Your college and your batch</strong> — the degree you earned at C. P. College of Agriculture, '
+      + 'and the year you passed out.</p>'
+      + '<p>That is how an administrator confirms you really are a CPCA alumnus. Sign in — no password, just your '
+      + 'email or Google account — open <strong>My profile</strong>, then <strong>CPCA &amp; education</strong>, '
+      + 'and add your degree. Approval usually follows within a day, and your profile then appears in the directory '
+      + 'alongside your batchmates.</p>';
+    try {
+      sendMail_(m.email, 'One step left to join the CPCA Alumni directory',
+                SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Add my college and batch'));
+      patch_('profiles/' + m.id + '/private/contact', { lastNudgeAt: numField_(now) }, ['lastNudgeAt']);
+      sent++;
+    } catch (err) { /* quota reached — the rest go on the next run */ }
+  });
+  return 'nudged ' + sent + ' of ' + due.length + ' people waiting for approval';
 }
 
 /** One-off check: emails only this portal's own address, never the members. */
