@@ -3,9 +3,17 @@
 This sends the portal's emails. It is a Google Apps Script, so it lives inside the
 **alumnigau@gmail.com** account: no server, no monthly cost, no password stored anywhere.
 
-Mail leaves through **Resend** (resend.com), which allows far more than a free Gmail account and
-reports bounces properly. If no Resend key is set the mailer falls back to Gmail, so it always
-works — just slowly.
+Mail leaves through **Brevo** or **Resend** — whichever key you put into the script decides, with
+no code change. If neither is set it falls back to Gmail, so it always works.
+
+| | Free plan | Cost after that | Good for |
+|---|---|---|---|
+| **Brevo** (recommended) | **300 a day** | ₹625/mo for 5,000/mo | announcements *and* reminders |
+| Resend | 100 a day, 3,000/mo | $20/mo, no daily limit | mostly transactional |
+| Gmail | ~100 a day | — | a stop-gap only |
+
+Brevo is the recommendation: 300 a day sends an announcement to the whole network in one go, it
+handles both broadcast and transactional mail, and it costs nothing at CPCA's volume.
 
 ## What it does
 - **Announcements** — every 10 minutes it looks for a new announcement posted on the portal with
@@ -18,23 +26,26 @@ works — just slowly.
 
 Only you can do these — they need an account and a secret key, and I will not handle either.
 
-1. **Create a Resend account** at https://resend.com (the free plan is 100 emails a day).
-2. **Verify the domain** `cpcaalumni.org` — Resend shows three DNS records to add. Add them in
+1. **Create a Brevo account** at https://www.brevo.com (free, no card).
+2. **Verify the domain** `cpcaalumni.org` — Brevo shows the DNS records to add. Add them in
    Cloudflare under the cpcaalumni.org domain, DNS tab. Verification takes a few minutes.
    *(Ask me and I will add the records for you; you just approve them.)*
-3. **Create an API key** in Resend (API Keys -> Create, sending permission is enough). Copy it.
+3. **Create an API key** in Brevo (SMTP & API -> API keys -> Generate). Copy it.
 4. **Put the key into the script**, never into the code: open the script ->
    **Project Settings** -> **Script properties** -> Add property ->
-   name `RESEND_KEY`, value the key -> Save.
-5. **Prove it works.** Run `sendTestToSelf` — it emails only alumnigau@gmail.com and nobody else.
+   name `BREVO_KEY`, value the key -> Save.
+   *(For Resend instead, everything is the same but the property is named `RESEND_KEY`.)*
+5. **Raise the run size.** Add a second property `DAILY_CAP` with the value `280`, so a whole
+   announcement goes out in one run rather than three.
+6. **Prove it works.** Run `sendTestToSelf` — it emails only alumnigau@gmail.com and nobody else.
 
 If something is wrong with the key or the domain, the mailer now **stops at the first message**
 with a note saying so, instead of quietly skipping everybody.
 
-### Sending more than 100 a day
-The free plan's 100/day is the only reason a backlog takes several days. On a paid Resend plan
-there is no daily limit: add a second script property named `DAILY_CAP` with a value like `500`,
-and each run will send that many. No code change.
+### If the network outgrows the free plan
+Brevo free is 300 a day. Beyond that: Brevo Starter is ₹625/month for 5,000 emails a month with no
+daily limit, and Zoho ZeptoMail is ₹150 for 10,000 emails (pay as you go, but transactional only —
+not for announcements to the whole list). Raise `DAILY_CAP` to match whatever plan you are on.
 
 ## Setting up the script itself (about five minutes, once)
 

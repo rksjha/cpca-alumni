@@ -10,9 +10,10 @@
  * password or key file anywhere. For that to work the account needs the "Cloud Datastore User"
  * role on the cpca-alumni-portal project (granted once, in the Google Cloud console).
  *
- * Mail goes out through Resend (resend.com). Every send is capped at DAILY_CAP and the rest are
- * picked up on the next run, so a daily allowance can never be overshot. Nobody is emailed twice
- * for the same thing.
+ * Mail goes out through Brevo or Resend — whichever key is set in Project Settings ->
+ * Script properties (BREVO_KEY or RESEND_KEY). With neither, it falls back to Gmail, so the
+ * mailer always works. Every send is capped at DAILY_CAP and the rest are picked up on the next
+ * run, so a daily allowance can never be overshot. Nobody is emailed twice for the same thing.
  */
 
 const PROJECT = 'cpca-alumni-portal';
@@ -20,12 +21,12 @@ const PORTAL = 'https://cpcaalumni.org';
 const SUPPORT = 'alumnigau@gmail.com';
 const REMINDER_GAP_DAYS = 21;    // never nudge the same person more often than this
 
-// Who the mail comes from. The address must be on a domain verified inside the Resend account.
+// Who the mail comes from. The address must be on a domain verified inside the mail service.
 const FROM = 'CPCA Alumni Network <alumni@cpcaalumni.org>';
 
-// How many people one run may email. Resend's free plan allows 100 a day, so 90 leaves headroom.
-// On a paid plan there is no daily limit — raise this by setting a DAILY_CAP script property
-// (Project Settings -> Script properties) to, say, 500. No code change needed.
+// How many people one run may email. Free plans allow 300 a day (Brevo) or 100 (Resend/Gmail),
+// so 90 is safe for all of them. Raise it by setting a DAILY_CAP script property
+// (Project Settings -> Script properties) to, say, 280 on Brevo. No code change needed.
 const DAILY_CAP = Number(PropertiesService.getScriptProperties().getProperty('DAILY_CAP')) || 90;
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT + '/databases/(default)/documents';
@@ -111,30 +112,53 @@ function approvedMembers_() {
 const plainText_ = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
 /**
- * The Resend API key. It is NOT written in this file and never goes into the code repository:
- * it is stored once inside this script, at Project Settings -> Script properties, named RESEND_KEY.
+ * Which mail service to use. Whichever key you put into the script decides — no code change:
+ *   Project Settings -> Script properties
+ *     BREVO_KEY   a Brevo key   (free plan: 300 a day)   <- recommended
+ *     RESEND_KEY  a Resend key  (free plan: 100 a day)
+ *     neither     Gmail is used (about 100 a day, from alumnigau@gmail.com)
+ * If both keys are present, Brevo wins. Nothing here is ever written into the code repository.
  */
-function resendKey_() {
-  return (PropertiesService.getScriptProperties().getProperty('RESEND_KEY') || '').trim();
+function prop_(name) {
+  return (PropertiesService.getScriptProperties().getProperty(name) || '').trim();
+}
+function sender_() {
+  if (prop_('BREVO_KEY')) return { via: 'Brevo', key: prop_('BREVO_KEY'), perDay: 300 };
+  if (prop_('RESEND_KEY')) return { via: 'Resend', key: prop_('RESEND_KEY'), perDay: 100 };
+  return { via: 'Gmail', key: '', perDay: 100 };
+}
+
+/** The from address split into the two pieces the services want. */
+function fromParts_() {
+  const m = /^(.*?)\s*<(.+)>$/.exec(FROM);
+  return m ? { name: m[1], email: m[2] } : { name: 'CPCA Alumni Network', email: FROM };
 }
 
 /**
- * Send one message. Uses Resend when a key is set, and otherwise falls back to Gmail so the
- * mailer keeps working. Throws if the message was not accepted — the callers treat that as
- * "try this person again on the next run", so nothing is silently lost.
+ * Send one message through whichever service is configured. Throws if it was not accepted —
+ * the callers treat an ordinary error as "try this person again next run", and a SETUP error
+ * as "stop everything", so a wrong key can never quietly skip all 125 people.
  */
 function sendMail_(to, subject, html, attempt) {
-  const key = resendKey_();
-  if (!key) {
-    GmailApp.sendEmail(to, subject, plainText_(html), { name: 'CPCA Alumni Network', replyTo: SUPPORT, htmlBody: html });
+  const s = sender_(), from = fromParts_();
+  if (s.via === 'Gmail') {
+    GmailApp.sendEmail(to, subject, plainText_(html), { name: from.name, replyTo: SUPPORT, htmlBody: html });
     return;
   }
-  const res = UrlFetchApp.fetch('https://api.resend.com/emails', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: 'Bearer ' + key },
-    muteHttpExceptions: true,
-    payload: JSON.stringify({ from: FROM, to: [to], reply_to: SUPPORT, subject: subject, html: html, text: plainText_(html) }),
+
+  const req = s.via === 'Brevo'
+    ? { url: 'https://api.brevo.com/v3/smtp/email',
+        headers: { 'api-key': s.key, accept: 'application/json' },
+        payload: { sender: from, to: [{ email: to }], replyTo: { email: SUPPORT },
+                   subject: subject, htmlContent: html, textContent: plainText_(html) } }
+    : { url: 'https://api.resend.com/emails',
+        headers: { Authorization: 'Bearer ' + s.key },
+        payload: { from: FROM, to: [to], reply_to: SUPPORT,
+                   subject: subject, html: html, text: plainText_(html) } };
+
+  const res = UrlFetchApp.fetch(req.url, {
+    method: 'post', contentType: 'application/json', headers: req.headers,
+    muteHttpExceptions: true, payload: JSON.stringify(req.payload),
   });
   const code = res.getResponseCode();
   if (code === 429 && (attempt || 0) < 2) {          // asked to slow down — wait, then try again
@@ -142,14 +166,16 @@ function sendMail_(to, subject, html, attempt) {
     return sendMail_(to, subject, html, (attempt || 0) + 1);
   }
   const text = res.getContentText().slice(0, 200);
-  // 401/403 mean the key or the sending domain is wrong — that is true for everybody, so say
-  // SETUP and let the run stop at the first person rather than fail silently 125 times over.
-  if (code === 401 || code === 403 || (code === 422 && /domain|from/i.test(text))) {
-    throw new Error('SETUP: Resend rejected the account (' + code + '): ' + text
-      + '  — check the RESEND_KEY script property and that ' + FROM + ' is on a verified domain.');
+  // 401/403 mean the key or the sending address is wrong, which is true for every recipient.
+  // Say SETUP so the run stops at the first message instead of failing silently 125 times.
+  // Brevo says 400 for a bad sender, Resend says 422 — treat both as a setup problem.
+  if (code === 401 || code === 403 || ((code === 400 || code === 422) && /sender|domain|from|not valid/i.test(text))) {
+    throw new Error('SETUP: ' + s.via + ' rejected the account (' + code + '): ' + text
+      + '  — check the ' + s.via.toUpperCase() + '_KEY script property, and that ' + from.email
+      + ' is on a domain verified inside ' + s.via + '.');
   }
-  if (code >= 300) throw new Error('Resend ' + code + ': ' + text);
-  Utilities.sleep(550);                              // Resend accepts two messages a second
+  if (code >= 300) throw new Error(s.via + ' ' + code + ': ' + text);
+  Utilities.sleep(550);                              // both services accept about two a second
 }
 
 /** True for a problem with the setup rather than with one recipient. */
@@ -157,8 +183,10 @@ const isSetupError_ = (err) => String((err && err.message) || err).indexOf('SETU
 
 /** A one-line description of how mail is being sent, for the reports below. */
 function senderNote_() {
-  return resendKey_() ? 'Sending through Resend, up to ' + DAILY_CAP + ' a run.'
-                      : 'No Resend key set — still sending through Gmail. Recipients left today: ' + MailApp.getRemainingDailyQuota() + '.';
+  const s = sender_();
+  return s.via === 'Gmail'
+    ? 'No mail-service key set — still sending through Gmail. Recipients left today: ' + MailApp.getRemainingDailyQuota() + '.'
+    : 'Sending through ' + s.via + ' (' + s.perDay + ' a day on the free plan), up to ' + DAILY_CAP + ' a run.';
 }
 
 const SHELL = function (title, body, buttonText, footerNote) {

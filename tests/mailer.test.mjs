@@ -36,7 +36,8 @@ const src = readFileSync(join(ROOT, "mailer", "Code.gs"), "utf8");
 // eslint-disable-next-line no-eval
 (0, eval)(src + "\nglobalThis.sendMail_ = sendMail_; globalThis.isSetupError_ = isSetupError_;"
   + " globalThis.DAILY_CAP = DAILY_CAP; globalThis.plainText_ = plainText_; globalThis.FROM = FROM;"
-  + " globalThis.firstName_ = firstName_; globalThis.SHELL = SHELL; globalThis.INVITE_FOOTER = INVITE_FOOTER;");
+  + " globalThis.firstName_ = firstName_; globalThis.SHELL = SHELL; globalThis.INVITE_FOOTER = INVITE_FOOTER;"
+  + " globalThis.sender_ = sender_; globalThis.senderNote_ = senderNote_; globalThis.fromParts_ = fromParts_;");
 
 let failed = 0;
 const ok = (name, cond) => { console.log((cond ? "  ok   " : "  FAIL ") + name); if (!cond) failed++; };
@@ -47,6 +48,40 @@ props = {}; calls = []; gmailCalls = [];
 sendMail_("a@example.com", "Subject", "<p>Hello <b>there</b></p>");
 ok("falls back to Gmail and makes no web request", gmailCalls.length === 1 && calls.length === 0);
 ok("includes a plain-text version of the message", gmailCalls[0][2] === "Hello there");
+
+console.log("\nChoosing the mail service from whichever key is set");
+props = {}; ok("no key at all -> Gmail", sender_().via === "Gmail");
+props = { RESEND_KEY: "r" }; ok("a Resend key -> Resend", sender_().via === "Resend");
+props = { BREVO_KEY: "b" }; ok("a Brevo key -> Brevo", sender_().via === "Brevo");
+props = { BREVO_KEY: "b", RESEND_KEY: "r" };
+ok("both keys -> Brevo wins (the larger free allowance)", sender_().via === "Brevo");
+ok("Brevo's daily allowance is reported as 300", sender_().perDay === 300);
+props = { RESEND_KEY: "r" }; ok("Resend's is reported as 100", sender_().perDay === 100);
+ok("the from address splits into a name and an address",
+   fromParts_().name === "CPCA Alumni Network" && fromParts_().email === "alumni@cpcaalumni.org");
+
+console.log("\nSending through Brevo");
+props = { BREVO_KEY: " xkeysib-abc " }; calls = []; gmailCalls = []; slept = 0;
+nextResponses = [{ code: 201, body: '{"messageId":"<1@brevo>"}' }];
+sendMail_("b@example.com", "Subject", "<p>Hi</p>");
+const bv = JSON.parse(calls[0].o.payload);
+ok("posts to Brevo's transactional endpoint", calls[0].url === "https://api.brevo.com/v3/smtp/email");
+ok("sends the key in the api-key header, trimmed", calls[0].o.headers["api-key"] === "xkeysib-abc");
+ok("sender is an object with name and email", bv.sender.email === "alumni@cpcaalumni.org" && bv.sender.name === "CPCA Alumni Network");
+ok("recipient and reply-to are set", bv.to[0].email === "b@example.com" && bv.replyTo.email === "alumnigau@gmail.com");
+ok("sends html and plain text", bv.htmlContent === "<p>Hi</p>" && bv.textContent === "Hi");
+ok("201 Created is treated as success", true);
+ok("Gmail is not touched", gmailCalls.length === 0);
+
+console.log("\nA bad Brevo key stops the run");
+props = { BREVO_KEY: "bad" }; nextResponses = [{ code: 401, body: '{"message":"Key not found"}' }];
+let be = threwFrom(() => sendMail_("x@example.com", "S", "<p>x</p>"));
+ok("401 from Brevo raises a setup error", be !== null && isSetupError_(be));
+ok("the message names Brevo and BREVO_KEY", /Brevo/.test(be.message) && /BREVO_KEY/.test(be.message));
+
+console.log("\nWhat the reports say about the sender");
+props = {}; ok("Gmail is named when no key is set", /Gmail/.test(senderNote_()));
+props = { BREVO_KEY: "b" }; ok("Brevo and its 300 a day are named", /Brevo/.test(senderNote_()) && /300/.test(senderNote_()));
 
 console.log("\nSending through Resend");
 props = { RESEND_KEY: " re_test_123 " }; calls = []; gmailCalls = []; slept = 0;
