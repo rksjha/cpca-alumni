@@ -267,11 +267,17 @@ function sendWeeklyReminders() {
 // ── Setup, run once from the editor ──────────────────────────────────────────
 function setUpTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('sendQueuedAnnouncements').timeBased().everyMinutes(10).create();
+  // Hourly, not every ten minutes. While an announcement is only part-sent, each run re-reads
+  // every member and their contact card — about 315 database reads. Six runs an hour came to
+  // roughly 45,000 reads a day, which is almost the whole free Firebase allowance of 50,000 and
+  // was starving the website itself. Hourly costs a sixth of that, and an announcement still
+  // reaches everyone the same day.
+  ScriptApp.newTrigger('sendQueuedAnnouncements').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('sendWeeklyReminders').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(10).create();
   ScriptApp.newTrigger('sendPendingNudge').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(10).create();
   ScriptApp.newTrigger('sendClaimInvites').timeBased().onWeekDay(ScriptApp.WeekDay.WEDNESDAY).atHour(10).create();
-  return 'Triggers set: announcements every 10 minutes, profile reminders Tuesdays, nudges to people awaiting approval Fridays.';
+  return 'Triggers set: announcements hourly, profile reminders Tuesdays, claim invitations Wednesdays, '
+       + 'nudges to people awaiting approval Fridays.';
 }
 
 /** Safe check — reads the database and counts recipients, sends nothing. */
