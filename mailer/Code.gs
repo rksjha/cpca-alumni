@@ -1,6 +1,6 @@
 /**
  * CPCA Alumni Network — mailer
- * Runs inside the alumnigau@gmail.com Google account (Apps Script), on a timer.
+ * Runs inside the admin@cpcaalumni.org Google Workspace account (Apps Script), on a timer.
  *
  * It does two jobs:
  *   sendQueuedAnnouncements()  — every 10 minutes: emails any new announcement to all members
@@ -10,6 +10,9 @@
  * password or key file anywhere. For that to work the account needs the "Cloud Datastore User"
  * role on the cpca-alumni-portal project (granted once, in the Google Cloud console).
  *
+ * It matters WHICH account this lives in: Apps Script allows 100 recipients a day from a personal
+ * gmail.com account and 1,500 from a Workspace account. Hence admin@cpcaalumni.org.
+ *
  * Mail goes out through Brevo or Resend — whichever key is set in Project Settings ->
  * Script properties (BREVO_KEY or RESEND_KEY). With neither, it falls back to Gmail, so the
  * mailer always works. Every send is capped at DAILY_CAP and the rest are picked up on the next
@@ -18,11 +21,16 @@
 
 const PROJECT = 'cpca-alumni-portal';
 const PORTAL = 'https://cpcaalumni.org';
-const SUPPORT = 'alumnigau@gmail.com';
+// The portal's mail identity. Everything is sent from this address and replies come back to it.
+// A friendlier alias (alumni@cpcaalumni.org) can be added in Workspace later — change it here and
+// nothing else needs touching. alumnigau@gmail.com remains a portal administrator either way.
+const SUPPORT = 'admin@cpcaalumni.org';
 const REMINDER_GAP_DAYS = 21;    // never nudge the same person more often than this
 
-// Who the mail comes from. The address must be on a domain verified inside the mail service.
-const FROM = 'CPCA Alumni Network <alumni@cpcaalumni.org>';
+// Who the mail comes from. Through Gmail this is really decided by the account the script runs
+// under — so the script must live in the admin@cpcaalumni.org Workspace account, which is also
+// what raises the limit from 100 messages a day to 1,500. The display name is used either way.
+const FROM = 'CPCA Alumni Network <admin@cpcaalumni.org>';
 
 // How many people one run may email. Free plans allow 300 a day (Brevo) or 100 (Resend/Gmail),
 // so 90 is safe for all of them. Raise it by setting a DAILY_CAP script property
@@ -39,7 +47,8 @@ function fsFetch_(url, options) {
   const res = UrlFetchApp.fetch(url, Object.assign({ headers: authHeaders_(), muteHttpExceptions: true }, options || {}));
   const code = res.getResponseCode();
   if (code === 403 || code === 401) {
-    throw new Error('The database refused this account. Grant alumnigau@gmail.com the "Cloud Datastore User" role on the ' + PROJECT + ' project, then run this again.');
+    throw new Error('The database refused this account. Grant ' + SUPPORT + ' the "Cloud Datastore User" '
+      + 'role on the ' + PROJECT + ' project (Google Cloud console -> IAM -> Grant access), then run this again.');
   }
   if (code >= 300) throw new Error('Firestore ' + code + ': ' + res.getContentText().slice(0, 300));
   return JSON.parse(res.getContentText() || '{}');
@@ -116,7 +125,7 @@ const plainText_ = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/
  *   Project Settings -> Script properties
  *     BREVO_KEY   a Brevo key   (free plan: 300 a day)   <- recommended
  *     RESEND_KEY  a Resend key  (free plan: 100 a day)
- *     neither     Gmail is used (about 100 a day, from alumnigau@gmail.com)
+ *     neither     Gmail is used — 1,500 a day from a Workspace account, 100 from a personal one
  * If both keys are present, Brevo wins. Nothing here is ever written into the code repository.
  */
 function prop_(name) {

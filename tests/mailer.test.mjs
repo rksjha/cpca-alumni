@@ -58,7 +58,9 @@ ok("both keys -> Brevo wins (the larger free allowance)", sender_().via === "Bre
 ok("Brevo's daily allowance is reported as 300", sender_().perDay === 300);
 props = { RESEND_KEY: "r" }; ok("Resend's is reported as 100", sender_().perDay === 100);
 ok("the from address splits into a name and an address",
-   fromParts_().name === "CPCA Alumni Network" && fromParts_().email === "alumni@cpcaalumni.org");
+   fromParts_().name === "CPCA Alumni Network" && fromParts_().email === "admin@cpcaalumni.org");
+ok("mail is sent from the portal's own domain, not a personal Gmail",
+   /@cpcaalumni\.org$/.test(fromParts_().email));
 
 console.log("\nSending through Brevo");
 props = { BREVO_KEY: " xkeysib-abc " }; calls = []; gmailCalls = []; slept = 0;
@@ -67,8 +69,8 @@ sendMail_("b@example.com", "Subject", "<p>Hi</p>");
 const bv = JSON.parse(calls[0].o.payload);
 ok("posts to Brevo's transactional endpoint", calls[0].url === "https://api.brevo.com/v3/smtp/email");
 ok("sends the key in the api-key header, trimmed", calls[0].o.headers["api-key"] === "xkeysib-abc");
-ok("sender is an object with name and email", bv.sender.email === "alumni@cpcaalumni.org" && bv.sender.name === "CPCA Alumni Network");
-ok("recipient and reply-to are set", bv.to[0].email === "b@example.com" && bv.replyTo.email === "alumnigau@gmail.com");
+ok("sender is an object with name and email", bv.sender.email === "admin@cpcaalumni.org" && bv.sender.name === "CPCA Alumni Network");
+ok("recipient and reply-to are set", bv.to[0].email === "b@example.com" && bv.replyTo.email === "admin@cpcaalumni.org");
 ok("sends html and plain text", bv.htmlContent === "<p>Hi</p>" && bv.textContent === "Hi");
 ok("201 Created is treated as success", true);
 ok("Gmail is not touched", gmailCalls.length === 0);
@@ -91,7 +93,7 @@ const body = JSON.parse(calls[0].o.payload);
 ok("Resend is used instead of Gmail", calls.length === 1 && gmailCalls.length === 0);
 ok("posts to the Resend messages endpoint", calls[0].url === "https://api.resend.com/emails");
 ok("sends the key as a bearer token, whitespace trimmed", calls[0].o.headers.Authorization === "Bearer re_test_123");
-ok("sets from, to and reply-to", body.from === FROM && body.to[0] === "b@example.com" && body.reply_to === "alumnigau@gmail.com");
+ok("sets from, to and reply-to", body.from === FROM && body.to[0] === "b@example.com" && body.reply_to === "admin@cpcaalumni.org");
 ok("sends both an HTML and a plain-text part", body.html === "<p>Hi</p>" && body.text === "Hi");
 ok("pauses between messages to respect the rate limit", slept === 550);
 
