@@ -198,6 +198,7 @@ function setUpTriggers() {
   ScriptApp.newTrigger('sendQueuedAnnouncements').timeBased().everyMinutes(10).create();
   ScriptApp.newTrigger('sendWeeklyReminders').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(10).create();
   ScriptApp.newTrigger('sendPendingNudge').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(10).create();
+  ScriptApp.newTrigger('sendClaimInvites').timeBased().onWeekDay(ScriptApp.WeekDay.WEDNESDAY).atHour(10).create();
   return 'Triggers set: announcements every 10 minutes, profile reminders Tuesdays, nudges to people awaiting approval Fridays.';
 }
 
@@ -267,6 +268,95 @@ function sendPendingNudge() {
     } catch (err) { /* quota reached — the rest go on the next run */ }
   });
   return 'nudged ' + sent + ' of ' + due.length + ' people waiting for approval';
+}
+
+// ── Job 4: invite the people whose profile is waiting to be claimed ─────────
+/**
+ * Alumni who answered the 2025 questionnaire. A profile was prepared for each of them and is
+ * hidden from the public; it becomes theirs the moment they sign in with the same email address.
+ * They have never signed in, so nothing else in this mailer reaches them.
+ */
+function unclaimedProfiles_() {
+  const profiles = query_({ structuredQuery: {
+    from: [{ collectionId: 'profiles' }],
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    limit: 2000,
+  } }).filter(function (p) {
+    return !p.userId && p.status === 'pending' && String(p.source || '').indexOf('questionnaire') >= 0;
+  });
+
+  const out = [];
+  for (let i = 0; i < profiles.length; i += 50) {
+    const slice = profiles.slice(i, i + 50);
+    const responses = UrlFetchApp.fetchAll(slice.map(function (p) {
+      return { url: BASE + '/profiles/' + p._id + '/private/contact', headers: authHeaders_(), muteHttpExceptions: true };
+    }));
+    responses.forEach(function (res, n) {
+      if (res.getResponseCode() !== 200) return;
+      const c = docFields_(JSON.parse(res.getContentText()));
+      if (c.email && c.email.indexOf('@') > 0) {
+        out.push({ id: slice[n]._id, profile: slice[n], name: slice[n].fullName || 'Alumnus',
+                   email: String(c.email).trim().toLowerCase(), lastInviteAt: c.lastInviteAt || 0 });
+      }
+    });
+  }
+  const seen = {};
+  return out.filter(function (m) { if (seen[m.email]) return false; seen[m.email] = 1; return true; });
+}
+
+/** The details the questionnaire gave us, written back to the person so they recognise them. */
+function knownDetails_(p) {
+  const rows = [];
+  const degree = (p.education || []).map(function (e) {
+    return [e.level, e.program, e.endYear].filter(Boolean).join(' ');
+  }).filter(Boolean);
+  if (degree.length) rows.push(['Degree', degree.join('; ')]);
+  if (p.campus) rows.push(['College', p.campus]);
+  if (p.batchYear) rows.push(['Batch', String(p.batchYear)]);
+  if (p.profession) rows.push(['Profession', p.professionDetail || p.profession]);
+  if (p.location) rows.push(['Place', p.location]);
+  if (!rows.length) return '';
+  return '<table style="border-collapse:collapse;margin:14px 0;font-size:14px">'
+    + rows.map(function (r) {
+        return '<tr><td style="padding:4px 14px 4px 0;color:#5d6b63;vertical-align:top">' + escapeHtml_(r[0])
+             + '</td><td style="padding:4px 0"><strong>' + escapeHtml_(r[1]) + '</strong></td></tr>';
+      }).join('')
+    + '</table>';
+}
+
+function sendClaimInvites() {
+  const now = Date.now(), gap = REMINDER_GAP_DAYS * 86400000;
+  const due = unclaimedProfiles_().filter(function (m) { return (now - (m.lastInviteAt || 0)) > gap; }).slice(0, DAILY_CAP);
+  let sent = 0;
+  due.forEach(function (m) {
+    const body = '<p>When you filled in the Gujarat agriculture alumni questionnaire, you gave us your details. '
+      + 'A profile has been prepared for you on the CPCA Alumni Network and it is <strong>waiting for you to claim it</strong>.</p>'
+      + '<p>Here is what we hold for you:</p>'
+      + knownDetails_(m.profile)
+      + '<p>It is <strong>not visible to anyone</strong> yet. Sign in with this same email address — '
+      + '<strong>' + escapeHtml_(m.email) + '</strong> — and the profile becomes yours: correct anything that is wrong, '
+      + 'add your photograph and your work, and decide who may see your phone number.</p>'
+      + '<p>There is no password. Choose "Continue with Google" or ask for a sign-in link by email.</p>';
+    try {
+      sendMail_(m.email, 'Your CPCA Alumni profile is ready to claim',
+                SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Claim my profile'));
+      patch_('profiles/' + m.id + '/private/contact', { lastInviteAt: numField_(now) }, ['lastInviteAt']);
+      sent++;
+    } catch (err) { /* quota reached — the rest go on the next run */ }
+  });
+  return 'invited ' + sent + ' of ' + due.length + ' people with an unclaimed profile';
+}
+
+/** Counts only — sends nothing. Shows what each job would do and the quota left. */
+function previewAll() {
+  const msg = [
+    'Unclaimed profiles to invite: ' + unclaimedProfiles_().length,
+    'Signed in but awaiting approval: ' + pendingMembers_().length,
+    'Approved members: ' + approvedMembers_().length,
+    'Gmail recipients left today: ' + MailApp.getRemainingDailyQuota(),
+  ].join(' | ');
+  Logger.log(msg);
+  return msg;
 }
 
 /** One-off check: emails only this portal's own address, never the members. */
