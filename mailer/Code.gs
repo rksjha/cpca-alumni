@@ -161,7 +161,7 @@ function senderNote_() {
                       : 'No Resend key set — still sending through Gmail. Recipients left today: ' + MailApp.getRemainingDailyQuota() + '.';
 }
 
-const SHELL = function (title, body, buttonText) {
+const SHELL = function (title, body, buttonText, footerNote) {
   return '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#14231c">'
     + '<div style="background:#0f3d2e;color:#fff;padding:20px 24px;border-radius:14px 14px 0 0">'
     + '<div style="font-size:19px;font-weight:600">CPCA Alumni Network</div>'
@@ -170,12 +170,28 @@ const SHELL = function (title, body, buttonText) {
     + '<h2 style="margin:0 0 14px;font-size:20px">' + title + '</h2>' + body
     + '<p style="margin:24px 0 8px"><a href="' + PORTAL + '" style="background:#0f3d2e;color:#fff;padding:11px 22px;'
     + 'border-radius:999px;text-decoration:none;display:inline-block">' + buttonText + '</a></p>'
-    + '<p style="font-size:12px;color:#5d6b63;margin-top:22px">You are receiving this because you are a member of the '
-    + 'CPCA Alumni Network. Questions, or want to stop these emails? Reply to this message or write to '
+    + '<p style="font-size:12px;color:#5d6b63;margin-top:22px">' + (footerNote || DEFAULT_FOOTER)
+    + ' Questions, or want to stop these emails? Reply to this message or write to '
     + '<a href="mailto:' + SUPPORT + '">' + SUPPORT + '</a>.</p></div></div>';
 };
 
+const DEFAULT_FOOTER = 'You are receiving this because you are a member of the CPCA Alumni Network.';
+// The people with an unclaimed profile have never joined, so the line above would be untrue.
+const INVITE_FOOTER = 'You are receiving this because you gave this email address when you answered the '
+  + 'Gujarat agriculture alumni questionnaire.';
+
 const escapeHtml_ = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Many alumni write their name with a title in front. Greeting them as "Hello Dr.," reads badly,
+// so skip over anything that is plainly a title and take the first real name after it.
+const TITLES = /^(dr|mr|mrs|ms|miss|prof|professor|shri|shree|smt|sri|er|ar|adv|capt|maj|col|late)\.?$/i;
+function firstName_(full) {
+  const words = String(full || '').trim().split(/\s+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    if (!TITLES.test(words[i].replace(/[.,]/g, ''))) return words[i];
+  }
+  return words[0] || 'there';     // a name that is nothing but titles — fall back rather than break
+}
 
 // ── Job 1: email each new announcement ───────────────────────────────────────
 function sendQueuedAnnouncements() {
@@ -240,7 +256,7 @@ function sendWeeklyReminders() {
       + '<p style="margin-bottom:0"><strong>Still to add:</strong></p>' + list;
     try {
       sendMail_(x.m.email, 'Finish your CPCA Alumni profile — it takes two minutes',
-                SHELL('Hello ' + escapeHtml_(String(x.m.name).split(' ')[0]) + ',', body, 'Complete my profile'));
+                SHELL('Hello ' + escapeHtml_(firstName_(x.m.name)) + ',', body, 'Complete my profile'));
       patch_('profiles/' + x.m.id + '/private/contact', { lastReminderAt: numField_(now) }, ['lastReminderAt']);
       sent++;
     } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go next week */ }
@@ -317,7 +333,7 @@ function sendPendingNudge() {
       + 'alongside your batchmates.</p>';
     try {
       sendMail_(m.email, 'One step left to join the CPCA Alumni directory',
-                SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Add my college and batch'));
+                SHELL('Hello ' + escapeHtml_(firstName_(m.name)) + ',', body, 'Add my college and batch'));
       patch_('profiles/' + m.id + '/private/contact', { lastNudgeAt: numField_(now) }, ['lastNudgeAt']);
       sent++;
     } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go on the next run */ }
@@ -394,7 +410,7 @@ function sendClaimInvites() {
       + '<p>There is no password. Choose "Continue with Google" or ask for a sign-in link by email.</p>';
     try {
       sendMail_(m.email, 'Your CPCA Alumni profile is ready to claim',
-                SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Claim my profile'));
+                SHELL('Hello ' + escapeHtml_(firstName_(m.name)) + ',', body, 'Claim my profile', INVITE_FOOTER));
       patch_('profiles/' + m.id + '/private/contact', { lastInviteAt: numField_(now) }, ['lastInviteAt']);
       sent++;
     } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go on the next run */ }

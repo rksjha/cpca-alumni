@@ -35,7 +35,8 @@ globalThis.Logger = { log: () => {} };
 const src = readFileSync(join(ROOT, "mailer", "Code.gs"), "utf8");
 // eslint-disable-next-line no-eval
 (0, eval)(src + "\nglobalThis.sendMail_ = sendMail_; globalThis.isSetupError_ = isSetupError_;"
-  + " globalThis.DAILY_CAP = DAILY_CAP; globalThis.plainText_ = plainText_; globalThis.FROM = FROM;");
+  + " globalThis.DAILY_CAP = DAILY_CAP; globalThis.plainText_ = plainText_; globalThis.FROM = FROM;"
+  + " globalThis.firstName_ = firstName_; globalThis.SHELL = SHELL; globalThis.INVITE_FOOTER = INVITE_FOOTER;");
 
 let failed = 0;
 const ok = (name, cond) => { console.log((cond ? "  ok   " : "  FAIL ") + name); if (!cond) failed++; };
@@ -89,6 +90,27 @@ console.log("\nWhen one address is bad, the run carries on");
 nextResponses = [{ code: 400, body: '{"message":"invalid to field"}' }];
 err = threwFrom(() => sendMail_("not-an-address", "S", "<p>x</p>"));
 ok("one bad recipient is an ordinary error, not a setup error", err !== null && !isSetupError_(err));
+
+console.log("\nGreeting people by name, not by their title");
+for (const [full, want] of [
+  ["Dr. Vinodkumar Parmar", "Vinodkumar"],
+  ["Dr Vinodkumar Parmar", "Vinodkumar"],
+  ["Rakesh S Jha", "Rakesh"],
+  ["Shri Bhavesh Patel", "Bhavesh"],
+  ["Smt. Nayana Desai", "Nayana"],
+  ["Prof. R. K. Chaudhary", "R."],
+  ["  Mahesh   Kumar  ", "Mahesh"],
+  ["Dr.", "Dr."],
+  ["", "there"],
+]) ok(`"${full}" -> ${want}`, firstName_(full) === want);
+
+console.log("\nThe footer must not claim someone is a member when they are not");
+ok("the invitation says why they are hearing from us",
+   SHELL("Hello", "<p>x</p>", "Claim", INVITE_FOOTER).includes("questionnaire"));
+ok("the invitation does not call them a member",
+   !SHELL("Hello", "<p>x</p>", "Claim", INVITE_FOOTER).includes("you are a member"));
+ok("ordinary member mail keeps the usual footer",
+   SHELL("Hello", "<p>x</p>", "Open").includes("you are a member"));
 
 console.log("\nHow many go out in one run");
 ok("defaults to 90 a run", DAILY_CAP === 90);
