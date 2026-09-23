@@ -10,15 +10,23 @@
  * password or key file anywhere. For that to work the account needs the "Cloud Datastore User"
  * role on the cpca-alumni-portal project (granted once, in the Google Cloud console).
  *
- * Gmail on a free account allows about 100 recipients a day, so every send is capped and the
- * rest are picked up on the next run. Nobody is emailed twice for the same thing.
+ * Mail goes out through Resend (resend.com). Every send is capped at DAILY_CAP and the rest are
+ * picked up on the next run, so a daily allowance can never be overshot. Nobody is emailed twice
+ * for the same thing.
  */
 
 const PROJECT = 'cpca-alumni-portal';
 const PORTAL = 'https://cpcaalumni.org';
 const SUPPORT = 'alumnigau@gmail.com';
-const DAILY_CAP = 90;            // stay under Gmail's free-account limit
 const REMINDER_GAP_DAYS = 21;    // never nudge the same person more often than this
+
+// Who the mail comes from. The address must be on a domain verified inside the Resend account.
+const FROM = 'CPCA Alumni Network <alumni@cpcaalumni.org>';
+
+// How many people one run may email. Resend's free plan allows 100 a day, so 90 leaves headroom.
+// On a paid plan there is no daily limit — raise this by setting a DAILY_CAP script property
+// (Project Settings -> Script properties) to, say, 500. No code change needed.
+const DAILY_CAP = Number(PropertiesService.getScriptProperties().getProperty('DAILY_CAP')) || 90;
 
 const BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT + '/databases/(default)/documents';
 
@@ -99,10 +107,58 @@ function approvedMembers_() {
   return out.filter(function (m) { if (seen[m.email]) return false; seen[m.email] = 1; return true; });
 }
 
-function sendMail_(to, subject, html) {
-  GmailApp.sendEmail(to, subject, html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), {
-    name: 'CPCA Alumni Network', replyTo: SUPPORT, htmlBody: html,
+/** The same message with the markup stripped out, for mail readers that show plain text. */
+const plainText_ = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The Resend API key. It is NOT written in this file and never goes into the code repository:
+ * it is stored once inside this script, at Project Settings -> Script properties, named RESEND_KEY.
+ */
+function resendKey_() {
+  return (PropertiesService.getScriptProperties().getProperty('RESEND_KEY') || '').trim();
+}
+
+/**
+ * Send one message. Uses Resend when a key is set, and otherwise falls back to Gmail so the
+ * mailer keeps working. Throws if the message was not accepted — the callers treat that as
+ * "try this person again on the next run", so nothing is silently lost.
+ */
+function sendMail_(to, subject, html, attempt) {
+  const key = resendKey_();
+  if (!key) {
+    GmailApp.sendEmail(to, subject, plainText_(html), { name: 'CPCA Alumni Network', replyTo: SUPPORT, htmlBody: html });
+    return;
+  }
+  const res = UrlFetchApp.fetch('https://api.resend.com/emails', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + key },
+    muteHttpExceptions: true,
+    payload: JSON.stringify({ from: FROM, to: [to], reply_to: SUPPORT, subject: subject, html: html, text: plainText_(html) }),
   });
+  const code = res.getResponseCode();
+  if (code === 429 && (attempt || 0) < 2) {          // asked to slow down — wait, then try again
+    Utilities.sleep(2000);
+    return sendMail_(to, subject, html, (attempt || 0) + 1);
+  }
+  const text = res.getContentText().slice(0, 200);
+  // 401/403 mean the key or the sending domain is wrong — that is true for everybody, so say
+  // SETUP and let the run stop at the first person rather than fail silently 125 times over.
+  if (code === 401 || code === 403 || (code === 422 && /domain|from/i.test(text))) {
+    throw new Error('SETUP: Resend rejected the account (' + code + '): ' + text
+      + '  — check the RESEND_KEY script property and that ' + FROM + ' is on a verified domain.');
+  }
+  if (code >= 300) throw new Error('Resend ' + code + ': ' + text);
+  Utilities.sleep(550);                              // Resend accepts two messages a second
+}
+
+/** True for a problem with the setup rather than with one recipient. */
+const isSetupError_ = (err) => String((err && err.message) || err).indexOf('SETUP:') === 0;
+
+/** A one-line description of how mail is being sent, for the reports below. */
+function senderNote_() {
+  return resendKey_() ? 'Sending through Resend, up to ' + DAILY_CAP + ' a run.'
+                      : 'No Resend key set — still sending through Gmail. Recipients left today: ' + MailApp.getRemainingDailyQuota() + '.';
 }
 
 const SHELL = function (title, body, buttonText) {
@@ -144,7 +200,7 @@ function sendQueuedAnnouncements() {
       try {
         sendMail_(m.email, a.title, SHELL(escapeHtml_(a.title), '<p>' + bodyHtml + '</p>', 'Open the portal'));
         already.push(m.email);
-      } catch (err) { /* quota reached or a bad address — the rest go next run */ }
+      } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go next run */ }
     });
     const done = already.length >= members.length;
     patch_('announcements/' + a._id,
@@ -187,7 +243,7 @@ function sendWeeklyReminders() {
                 SHELL('Hello ' + escapeHtml_(String(x.m.name).split(' ')[0]) + ',', body, 'Complete my profile'));
       patch_('profiles/' + x.m.id + '/private/contact', { lastReminderAt: numField_(now) }, ['lastReminderAt']);
       sent++;
-    } catch (err) { /* quota reached — the rest go next week */ }
+    } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go next week */ }
   });
   return 'reminders sent: ' + sent + ' of ' + due.length + ' due (' + members.length + ' members checked)';
 }
@@ -207,8 +263,7 @@ function testConnection() {
   const members = approvedMembers_();
   const incomplete = members.filter(function (m) { return missingBits_(m.profile).length >= 2; });
   const msg = 'Connected. ' + members.length + ' members with an email address; '
-            + incomplete.length + ' have an incomplete profile. Gmail remaining today: '
-            + MailApp.getRemainingDailyQuota() + '.';
+            + incomplete.length + ' have an incomplete profile. ' + senderNote_();
   Logger.log(msg);
   return msg;
 }
@@ -265,7 +320,7 @@ function sendPendingNudge() {
                 SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Add my college and batch'));
       patch_('profiles/' + m.id + '/private/contact', { lastNudgeAt: numField_(now) }, ['lastNudgeAt']);
       sent++;
-    } catch (err) { /* quota reached — the rest go on the next run */ }
+    } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go on the next run */ }
   });
   return 'nudged ' + sent + ' of ' + due.length + ' people waiting for approval';
 }
@@ -342,7 +397,7 @@ function sendClaimInvites() {
                 SHELL('Hello ' + escapeHtml_(String(m.name).split(' ')[0]) + ',', body, 'Claim my profile'));
       patch_('profiles/' + m.id + '/private/contact', { lastInviteAt: numField_(now) }, ['lastInviteAt']);
       sent++;
-    } catch (err) { /* quota reached — the rest go on the next run */ }
+    } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go on the next run */ }
   });
   return 'invited ' + sent + ' of ' + due.length + ' people with an unclaimed profile';
 }
@@ -353,7 +408,7 @@ function previewAll() {
     'Unclaimed profiles to invite: ' + unclaimedProfiles_().length,
     'Signed in but awaiting approval: ' + pendingMembers_().length,
     'Approved members: ' + approvedMembers_().length,
-    'Gmail recipients left today: ' + MailApp.getRemainingDailyQuota(),
+    senderNote_(),
   ].join(' | ');
   Logger.log(msg);
   return msg;
