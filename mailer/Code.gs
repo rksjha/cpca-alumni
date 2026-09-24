@@ -225,9 +225,16 @@ const TITLES = /^(dr|mr|mrs|ms|miss|prof|professor|shri|shree|smt|sri|er|ar|adv|
 function firstName_(full) {
   const words = String(full || '').trim().split(/\s+/).filter(Boolean);
   for (let i = 0; i < words.length; i++) {
-    if (!TITLES.test(words[i].replace(/[.,]/g, ''))) return words[i];
+    if (!TITLES.test(words[i].replace(/[.,]/g, ''))) return tidyCase_(words[i]);
   }
-  return words[0] || 'there';     // a name that is nothing but titles — fall back rather than break
+  return tidyCase_(words[0]) || 'there';   // nothing but titles — fall back rather than break
+}
+
+// Plenty of people typed their name in lower case on the form, and "Hello mayur," reads poorly.
+// Only an all-lower-case word is touched, so McDonald, DeSouza and RK keep the spelling they chose.
+function tidyCase_(word) {
+  const w = String(word || '');
+  return /^[a-z]+$/.test(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w;
 }
 
 // ── Job 1: email each new announcement ───────────────────────────────────────

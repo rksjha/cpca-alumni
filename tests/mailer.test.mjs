@@ -137,6 +137,12 @@ for (const [full, want] of [
   ["Smt. Nayana Desai", "Nayana"],
   ["Prof. R. K. Chaudhary", "R."],
   ["  Mahesh   Kumar  ", "Mahesh"],
+  ["mayur", "Mayur"],
+  ["mayurprajapat", "Mayurprajapat"],
+  ["McDonald Fernandes", "McDonald"],
+  ["RK Chaudhary", "RK"],
+  ["DeSouza", "DeSouza"],
+  ["Dr. mayur patel", "Mayur"],
   ["Dr.", "Dr."],
   ["", "there"],
 ]) ok(`"${full}" -> ${want}`, firstName_(full) === want);
