@@ -238,6 +238,74 @@ function tidyCase_(word) {
 }
 
 // ── Job 1: email each new announcement ───────────────────────────────────────
+/**
+ * Everyone an announcement should reach: verified members, people who have signed in but are not
+ * approved yet, and the alumni whose profile is still waiting to be claimed. One pass over the
+ * profiles rather than calling the three separate helpers, which overlap and would read the same
+ * contact cards twice.
+ *
+ * Each person is tagged with `kind` so the message can close with the right words — a reader who
+ * has never signed in must not be told they are already a member.
+ */
+function announcementAudience_() {
+  const profiles = query_({ structuredQuery: {
+    from: [{ collectionId: 'profiles' }],
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    limit: 2000,
+  } });
+
+  const wanted = [];
+  profiles.forEach(function (p) {
+    if (p.userId) wanted.push({ p: p, kind: p.status === 'approved' ? 'member' : 'pending' });
+    else if (p.status === 'pending' && String(p.source || '').indexOf('questionnaire') >= 0) {
+      wanted.push({ p: p, kind: 'unclaimed' });
+    }
+  });
+
+  const out = [];
+  for (let i = 0; i < wanted.length; i += 50) {
+    const slice = wanted.slice(i, i + 50);
+    const responses = UrlFetchApp.fetchAll(slice.map(function (w) {
+      return { url: BASE + '/profiles/' + w.p._id + '/private/contact', headers: authHeaders_(), muteHttpExceptions: true };
+    }));
+    responses.forEach(function (res, n) {
+      if (res.getResponseCode() !== 200) return;
+      const c = docFields_(JSON.parse(res.getContentText()));
+      if (c.email && String(c.email).indexOf('@') > 0) {
+        out.push({ id: slice[n].p._id, kind: slice[n].kind, name: slice[n].p.fullName || 'Alumnus',
+                   email: String(c.email).trim().toLowerCase() });
+      }
+    });
+  }
+  // One address only. A verified member wins over the same address sitting on an unclaimed profile.
+  const rank = { member: 0, pending: 1, unclaimed: 2 };
+  out.sort(function (a, b) { return rank[a.kind] - rank[b.kind]; });
+  const seen = {};
+  return out.filter(function (m) { if (seen[m.email]) return false; seen[m.email] = 1; return true; });
+}
+
+/** The closing paragraph and button, which differ by how far along the reader is. */
+function audienceTail_(kind) {
+  if (kind === 'unclaimed') {
+    return { note: '<p style="background:#f6edcf;padding:14px;border-radius:10px;margin:18px 0 0">'
+        + 'A profile is already waiting for you on the network. Sign in with this email address to claim it, '
+        + 'check your details and add your photograph — there is no password.</p>',
+      button: 'Claim my profile', footer: INVITE_FOOTER };
+  }
+  if (kind === 'pending') {
+    return { note: '<p style="background:#f6edcf;padding:14px;border-radius:10px;margin:18px 0 0">'
+        + 'Your profile is not in the directory yet. Sign in, open <strong>My profile</strong> and add the degree '
+        + 'you earned at C. P. College of Agriculture, and an administrator can approve you.</p>',
+      button: 'Complete my profile', footer: DEFAULT_FOOTER };
+  }
+  return { note: '', button: 'Open the portal', footer: DEFAULT_FOOTER };
+}
+
+// An announcement that can never finish — a handful of dead addresses that always throw — would
+// otherwise be retried every hour for ever, re-reading every profile each time. Let it go after
+// this many days and mark it sent.
+const ANNOUNCEMENT_MAX_DAYS = 14;
+
 function sendQueuedAnnouncements() {
   // Read the newest announcements and pick the unsent ones here. (Firestore's REST API needs a
   // special "is null" filter for null fields, and getting that subtly wrong silently matches
@@ -249,7 +317,9 @@ function sendQueuedAnnouncements() {
   } }).filter(function (a) { return a.emailQueuedAt && !a.emailSentAt; }).slice(0, 5);
 
   if (!queued.length) return 'nothing queued';
-  const members = approvedMembers_();
+  // Everyone with an address on file, not only approved members: an announcement is also the thing
+  // most likely to bring the people who have not finished joining back to the portal.
+  const members = announcementAudience_();
   let report = [];
 
   queued.forEach(function (a) {
@@ -258,11 +328,14 @@ function sendQueuedAnnouncements() {
     const bodyHtml = escapeHtml_(a.body).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
     todo.forEach(function (m) {
       try {
-        sendMail_(m.email, a.title, SHELL(escapeHtml_(a.title), '<p>' + bodyHtml + '</p>', 'Open the portal'));
+        const tail = audienceTail_(m.kind);
+        sendMail_(m.email, a.title,
+          SHELL(escapeHtml_(a.title), '<p>' + bodyHtml + '</p>' + tail.note, tail.button, tail.footer));
         already.push(m.email);
       } catch (err) { if (isSetupError_(err)) throw err; /* a bad address — the rest go next run */ }
     });
-    const done = already.length >= members.length;
+    const tooOld = (Date.now() - (a.createdAt || Date.now())) > ANNOUNCEMENT_MAX_DAYS * 86400000;
+    const done = already.length >= members.length || tooOld;
     patch_('announcements/' + a._id,
       done ? { emailSentAt: numField_(Date.now()), emailSentTo: { arrayValue: { values: already.map(function (e) { return { stringValue: e }; }) } } }
            : { emailSentTo: { arrayValue: { values: already.map(function (e) { return { stringValue: e }; }) } } },
@@ -470,7 +543,12 @@ function sendClaimInvites() {
 
 /** Counts only — sends nothing. Shows what each job would do and the quota left. */
 function previewAll() {
+  const audience = announcementAudience_();
+  const count = function (k) { return audience.filter(function (m) { return m.kind === k; }).length; };
   const msg = [
+    'An announcement now reaches ' + audience.length + ' people'
+      + ' (' + count('member') + ' verified, ' + count('pending') + ' awaiting approval, '
+      + count('unclaimed') + ' not yet claimed)',
     'Unclaimed profiles to invite: ' + unclaimedProfiles_().length,
     'Signed in but awaiting approval: ' + pendingMembers_().length,
     'Approved members: ' + approvedMembers_().length,

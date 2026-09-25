@@ -25,9 +25,14 @@ the one `SUPPORT` line at the top of `Code.gs`. Nothing else needs touching.
 
 ## What it does
 - **Announcements** — every hour it looks for a new announcement posted on the portal with
-  "email this to members" ticked, and sends it to every approved member. Nobody is emailed twice.
-  (Hourly, not more often: while an announcement is part-sent each run re-reads every member, and
-  running it six times an hour was using up the free Firebase database allowance.)
+  "email this to members" ticked, and sends it to **everyone with an email address on file**:
+  verified members, people who have signed in but are not approved yet, and alumni whose profile is
+  still waiting to be claimed. The last two groups get an extra line inviting them back to finish
+  joining, and are never told they are already members. Nobody is emailed twice.
+  (Hourly, not more often: while an announcement is part-sent each run re-reads every profile, and
+  running it six times an hour was using up the free Firebase database allowance. An announcement
+  that still cannot finish after 14 days is marked sent, so a few dead addresses cannot keep it
+  running for ever.)
 - **Weekly reminders** — every Tuesday morning it emails members whose profile is still missing two
   or more things, listing exactly what to add. The same person is never nudged more than once every
   three weeks.

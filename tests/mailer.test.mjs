@@ -37,7 +37,9 @@ const src = readFileSync(join(ROOT, "mailer", "Code.gs"), "utf8");
 (0, eval)(src + "\nglobalThis.sendMail_ = sendMail_; globalThis.isSetupError_ = isSetupError_;"
   + " globalThis.DAILY_CAP = DAILY_CAP; globalThis.plainText_ = plainText_; globalThis.FROM = FROM;"
   + " globalThis.firstName_ = firstName_; globalThis.SHELL = SHELL; globalThis.INVITE_FOOTER = INVITE_FOOTER;"
-  + " globalThis.sender_ = sender_; globalThis.senderNote_ = senderNote_; globalThis.fromParts_ = fromParts_;");
+  + " globalThis.sender_ = sender_; globalThis.senderNote_ = senderNote_; globalThis.fromParts_ = fromParts_;"
+  + " globalThis.announcementAudience_ = announcementAudience_; globalThis.audienceTail_ = audienceTail_;"
+  + " globalThis.query_ = (q) => globalThis.__query(q); globalThis.DEFAULT_FOOTER = DEFAULT_FOOTER;");
 
 let failed = 0;
 const ok = (name, cond) => { console.log((cond ? "  ok   " : "  FAIL ") + name); if (!cond) failed++; };
@@ -154,6 +156,44 @@ ok("the invitation does not call them a member",
    !SHELL("Hello", "<p>x</p>", "Claim", INVITE_FOOTER).includes("you are a member"));
 ok("ordinary member mail keeps the usual footer",
    SHELL("Hello", "<p>x</p>", "Open").includes("you are a member"));
+
+console.log("\nWho an announcement reaches");
+// Stand in for the database: three profiles plus one that must be left out.
+globalThis.__query = () => ([
+  { _id: "a1", userId: "u1", status: "approved", fullName: "Approved Member" },
+  { _id: "p1", userId: "u2", status: "pending", fullName: "Signed In Not Approved" },
+  { _id: "c1", userId: null, status: "pending", source: "GAU alumni questionnaire 2025", fullName: "Never Signed In" },
+  { _id: "x1", userId: null, status: "pending", source: "college list", fullName: "Not From The Questionnaire" },
+  { _id: "d1", userId: null, status: "pending", source: "GAU alumni questionnaire 2025", fullName: "Duplicate Address" },
+]);
+const CONTACTS = { a1: "approved@x.com", p1: "pending@x.com", c1: "unclaimed@x.com", x1: "other@x.com", d1: "approved@x.com" };
+globalThis.UrlFetchApp.fetchAll = (reqs) => reqs.map((r) => {
+  const id = r.url.split("/profiles/")[1].split("/")[0];
+  return { getResponseCode: () => 200,
+           getContentText: () => JSON.stringify({ name: "projects/p/databases/(default)/documents/profiles/" + id,
+                                                  fields: { email: { stringValue: CONTACTS[id] } } }) };
+});
+
+const aud = announcementAudience_();
+const byKind = (k) => aud.filter((m) => m.kind === k).map((m) => m.email);
+ok("a verified member is included", byKind("member").includes("approved@x.com"));
+ok("someone signed in but not approved is included", byKind("pending").includes("pending@x.com"));
+ok("someone who has never signed in is included", byKind("unclaimed").includes("unclaimed@x.com"));
+ok("a profile that is not from the questionnaire is left out", !aud.some((m) => m.email === "other@x.com"));
+ok("one address only, even across two profiles", aud.filter((m) => m.email === "approved@x.com").length === 1);
+ok("and the verified record is the one kept", byKind("member").includes("approved@x.com") && !byKind("unclaimed").includes("approved@x.com"));
+// a1 + p1 + c1 + d1 are wanted, but d1 shares a1's address, so three distinct people remain.
+ok("three distinct people in total", aud.length === 3);
+
+console.log("\nEach group is addressed honestly");
+const forMember = audienceTail_("member"), forPending = audienceTail_("pending"), forUnclaimed = audienceTail_("unclaimed");
+ok("a verified member gets no extra nagging", forMember.note === "");
+ok("someone awaiting approval is told what is missing", /college|degree/i.test(forPending.note));
+ok("someone who never signed in is told a profile awaits them", /claim/i.test(forUnclaimed.note));
+ok("and is NOT told they are already a member",
+   !SHELL("t", "<p>b</p>", forUnclaimed.button, forUnclaimed.footer).includes("you are a member"));
+ok("while a verified member still is", SHELL("t", "<p>b</p>", forMember.button, forMember.footer).includes("you are a member"));
+ok("the buttons differ per group", forMember.button !== forPending.button && forPending.button !== forUnclaimed.button);
 
 console.log("\nHow many go out in one run");
 ok("defaults to 90 a run", DAILY_CAP === 90);
