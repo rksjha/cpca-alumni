@@ -248,7 +248,40 @@ function tidyCase_(word) {
  * Each person is tagged with `kind` so the message can close with the right words — a reader who
  * has never signed in must not be told they are already a member.
  */
+// Working out who an announcement reaches costs a read for every profile and every contact card —
+// about 900 of them. While an announcement is only part-sent that happened EVERY HOUR, which is
+// roughly 21,000 reads a day against the free plan's 50,000, and on 25 Sep 2026 it ran the database
+// out of reads for the day. The list barely changes between runs, so it is worked out at most
+// once every AUDIENCE_HOURS and kept in a single document: 900 reads become 1.
+const AUDIENCE_HOURS = 12;
+const AUDIENCE_DOC = 'system/audience';
+
 function announcementAudience_() {
+  const fresh = Date.now() - AUDIENCE_HOURS * 3600000;
+  try {
+    const doc = fsFetch_(BASE + '/' + AUDIENCE_DOC);
+    const f = docFields_(doc);
+    if (f.builtAt && f.builtAt > fresh && f.list) return JSON.parse(f.list);
+  } catch (e) { /* no cache yet, or unreadable — build it below */ }
+
+  const list = buildAnnouncementAudience_();
+  try {
+    fsFetch_(BASE + '/' + AUDIENCE_DOC + '?updateMask.fieldPaths=builtAt&updateMask.fieldPaths=list', {
+      method: 'patch',
+      payload: JSON.stringify({ fields: { builtAt: numField_(Date.now()),
+        list: { stringValue: JSON.stringify(list) } } }),
+    });
+  } catch (e) { /* caching is an optimisation; never let it stop the post going out */ }
+  return list;
+}
+
+/** Forget the cached list — call after approving people, or to pick up changes at once. */
+function refreshAudience() {
+  try { fsFetch_(BASE + '/' + AUDIENCE_DOC, { method: 'delete' }); } catch (e) { /* nothing cached */ }
+  return 'the audience will be worked out again on the next run';
+}
+
+function buildAnnouncementAudience_() {
   const profiles = query_({ structuredQuery: {
     from: [{ collectionId: 'profiles' }],
     orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
