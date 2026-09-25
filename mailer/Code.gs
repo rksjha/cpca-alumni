@@ -3,7 +3,8 @@
  * Runs inside the admin@cpcaalumni.org Google Workspace account (Apps Script), on a timer.
  *
  * It does two jobs:
- *   sendQueuedAnnouncements()  — every 10 minutes: emails any new announcement to all members
+ *   sendQueuedAnnouncements()  — hourly: emails any new announcement to everyone on file
+ *   sendAdminMessages()        — hourly: posts the notes an administrator wrote to one member
  *   sendWeeklyReminders()      — once a week: nudges members whose profile is still incomplete
  *
  * It reads the portal's database directly with this account's own Google sign-in — there is no
@@ -345,6 +346,33 @@ function sendQueuedAnnouncements() {
   return report.join(' | ');
 }
 
+// ── Job 5: one-to-one notes an administrator wrote from the admin desk ──────
+/**
+ * An administrator asking one member for something — usually the detail needed before deciding
+ * whether to approve them. Written in the portal, sent here, so all mail leaves one place.
+ */
+function sendAdminMessages() {
+  const queued = query_({ structuredQuery: {
+    from: [{ collectionId: 'messages' }],
+    orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+    limit: 200,
+  } }).filter(function (m) { return m.to && !m.sentAt; }).slice(0, DAILY_CAP);
+
+  if (!queued.length) return 'nothing to send';
+  let sent = 0;
+  queued.forEach(function (m) {
+    const body = '<p>' + escapeHtml_(m.body).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') + '</p>'
+      + '<p style="margin-top:18px">Just reply to this email — it reaches the administrators directly.</p>';
+    try {
+      sendMail_(m.to, m.subject || 'A message from the CPCA Alumni Network',
+        SHELL('Hello ' + escapeHtml_(firstName_(m.toName)) + ',', body, 'Open my profile'));
+      patch_('messages/' + m._id, { sentAt: numField_(Date.now()) }, ['sentAt']);
+      sent++;
+    } catch (err) { if (isSetupError_(err)) throw err; /* retry on the next run */ }
+  });
+  return 'sent ' + sent + ' of ' + queued.length + ' administrator messages';
+}
+
 // ── Job 2: weekly nudge for unfinished profiles ──────────────────────────────
 function missingBits_(p) {
   const gaps = [];
@@ -390,11 +418,12 @@ function setUpTriggers() {
   // was starving the website itself. Hourly costs a sixth of that, and an announcement still
   // reaches everyone the same day.
   ScriptApp.newTrigger('sendQueuedAnnouncements').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('sendAdminMessages').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('sendWeeklyReminders').timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(10).create();
   ScriptApp.newTrigger('sendPendingNudge').timeBased().onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(10).create();
   ScriptApp.newTrigger('sendClaimInvites').timeBased().onWeekDay(ScriptApp.WeekDay.WEDNESDAY).atHour(10).create();
-  return 'Triggers set: announcements hourly, profile reminders Tuesdays, claim invitations Wednesdays, '
-       + 'nudges to people awaiting approval Fridays.';
+  return 'Triggers set: announcements and administrator messages hourly, profile reminders Tuesdays, '
+       + 'claim invitations Wednesdays, nudges to people awaiting approval Fridays.';
 }
 
 /** Safe check — reads the database and counts recipients, sends nothing. */

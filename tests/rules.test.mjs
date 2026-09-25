@@ -120,6 +120,21 @@ await it("a stranger cannot post one", () => assertFails(setDoc(doc(stranger(), 
 await it("an ordinary member cannot post one", () => assertFails(setDoc(doc(member(), "announcements/y"), { title: "Fake", body: "b" })));
 await it("an administrator can post one", () => assertSucceeds(setDoc(doc(admin(), "announcements/z"), { title: "Notice", body: "b", createdAt: 1 })));
 
+// ── Messages an administrator sends to one member ──
+// Unlike the noticeboard these hold a member's own email address, so they must never be public.
+const AMSG = { profileId: "pending1", to: "new@example.com", subject: "About your degree", body: "Which year?", createdAt: 1, sentAt: null };
+await it("a stranger cannot read a message sent to a member", () => assertFails(getDoc(doc(stranger(), "messages/m1"))));
+await it("a stranger cannot write one", () => assertFails(setDoc(doc(stranger(), "messages/m1"), AMSG)));
+await it("an ordinary member cannot read them", () => assertFails(getDoc(doc(member(), "messages/m1"))));
+await it("an ordinary member cannot read the whole list", () => assertFails(getDocs(collection(member(), "messages"))));
+await it("an ordinary member cannot write one", () => assertFails(setDoc(doc(member(), "messages/m2"), AMSG)));
+await it("the member it is about still cannot read it", () => assertFails(getDoc(doc(asUser("pendingUid", "new@example.com"), "messages/m1"))));
+await it("an administrator can send one", () => assertSucceeds(setDoc(doc(admin(), "messages/m1"), AMSG)));
+await it("an administrator can read them", () => assertSucceeds(getDoc(doc(admin(), "messages/m1"))));
+await it("nobody can rewrite a message after it is sent, not even an administrator",
+  () => assertFails(updateDoc(doc(admin(), "messages/m1"), { body: "changed" })));
+await it("an administrator can delete one", () => assertSucceeds(deleteDoc(doc(admin(), "messages/m1"))));
+
 console.log("\nChat rooms");
 await it("a stranger cannot read a room", () => assertFails(getDoc(doc(stranger(), "rooms/r1"))));
 await it("a stranger cannot read its messages", () => assertFails(getDoc(doc(stranger(), "rooms/r1/messages/m1"))));

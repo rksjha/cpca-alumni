@@ -308,6 +308,33 @@ CPCA.data = (function () {
   }
 
   // ── Administration ──
+
+  /**
+   * Ask one member for something — usually the detail an administrator needs before deciding
+   * whether to approve them. Stored here and sent by the mailer within the hour, from
+   * admin@cpcaalumni.org, with replies going back to that address.
+   */
+  async function adminSendMessage(profileId, { to, name, subject, body }) {
+    const addr = String(to || "").trim().toLowerCase();
+    if (!addr || addr.indexOf("@") < 1) throw new Error("That member has no email address on file, so they cannot be written to.");
+    if (!String(subject || "").trim()) throw new Error("Please give the message a subject.");
+    if (!String(body || "").trim()) throw new Error("Please write a message.");
+    const me = auth.currentUser;
+    await db.collection("messages").add({
+      profileId, to: addr, toName: String(name || "").slice(0, 120),
+      subject: String(subject).trim().slice(0, 160),
+      body: String(body).trim().slice(0, 8000),
+      fromEmail: (me && me.email ? me.email.toLowerCase() : ""),
+      createdAt: Date.now(), sentAt: null,
+    });
+  }
+
+  /** What has been sent to this member before, newest first. */
+  async function adminListMessages(profileId) {
+    const snap = await db.collection("messages").where("profileId", "==", profileId).get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   async function adminListMembers() {
     const snap = await db.collection("profiles").orderBy("createdAt", "desc").get();
     const rows = await Promise.all(snap.docs.map(async (doc) => {
@@ -318,6 +345,9 @@ CPCA.data = (function () {
         is_distinguished: Boolean(d.isDistinguished), batch_year: d.batchYear || null,
         campus: d.campus || null, profession: d.profession || null, source: d.source || null,
         created_at: d.createdAt || Date.now(), user_id: d.userId || null,
+        merged_into: d.mergedInto || null,
+        headline: d.headline || null, location: d.location || null,
+        profession_detail: d.professionDetail || null,
         profile_private: contact ? { email: contact.email || null, phone: contact.phone || null } : null,
         education: (d.education || []).map((e) => ({ level: e.level, program: e.program, end_year: e.endYear, is_cpca: Boolean(e.isCpca) })) };
     }));
@@ -483,6 +513,6 @@ CPCA.data = (function () {
     ready, getUser, onAuthChange, signInWith, sendEmailCode, signOut, isEmailLink,
     joinNetwork, isAdmin, saveProfile, saveContact, saveRow, deleteRow, saveCompany, uploadPhoto,
     signInPhoto, adoptSignInPhoto,
-    adminListMembers, adminSetStatus, adminSetDistinguished, adminListEmails, adminAddEmail, adminRemoveEmail, adminImport,
+    adminListMembers, adminSendMessage, adminListMessages, adminSetStatus, adminSetDistinguished, adminListEmails, adminAddEmail, adminRemoveEmail, adminImport,
   };
 })();

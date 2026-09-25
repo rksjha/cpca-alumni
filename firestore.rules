@@ -90,6 +90,13 @@ service cloud.firestore {
       allow write:  if isAdmin();
     }
 
+    // ── Messages an administrator sends to one member. These quote a member's own email
+    //    address, so unlike the noticeboard they are never public — administrators only. ──
+    match /messages/{id} {
+      allow read, create, delete: if isAdmin();
+      allow update: if false;            // the mailer marks them sent with its own credentials
+    }
+
     // ── Announcements: anyone may read the noticeboard; only administrators write ──
     match /announcements/{id} {
       allow read: if true;
