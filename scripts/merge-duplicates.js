@@ -195,14 +195,21 @@
     /**
      * Merges every duplicate group. Anything flagged by report() as needing a decision is left
      * alone unless you pass { includeFlagged: true } after deciding yourself.
+     *
+     * Pass { only: "some name" } to deal with a single group and leave every other one untouched —
+     * useful when one flagged group has been thought about and the rest have not.
+     *   await cpcaDedupe.merge({ only: "Praful Parmar", includeFlagged: true })
      */
     async merge(opts) {
       opts = opts || {};
+      const only = opts.only ? String(opts.only).toLowerCase() : null;
       const all = await loadAll();
       const pairs = plan(all);
       const out = [];
       for (const { keep, drop } of pairs) {
         for (const d of drop) {
+          if (only && ![keep.profile.fullName, d.profile.fullName, keep.id, d.id]
+              .some((v) => String(v || "").toLowerCase().includes(only))) continue;
           const suspended = keep.profile.status === "suspended" || d.profile.status === "suspended";
           const batchClash = keep.profile.batchYear && d.profile.batchYear
             && keep.profile.batchYear !== d.profile.batchYear;
