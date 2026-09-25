@@ -8,7 +8,8 @@
     "deploy": "firebase deploy --only hosting --project cpca-alumni-portal && node scripts/check-deploy.mjs",
     "deploy:rules": "firebase deploy --only firestore:rules --project cpca-alumni-portal",
     "check": "node scripts/check-deploy.mjs",
-    "test:mailer": "node tests/mailer.test.mjs"
+    "test:mailer": "node tests/mailer.test.mjs",
+    "test:ui": "node tests/ui.test.mjs"
   },
   "dependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",

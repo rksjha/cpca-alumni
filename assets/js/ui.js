@@ -16,18 +16,39 @@ CPCA.ui = (function () {
     } catch (e) { return ""; }
   }
 
+  // Profile photographs, unlike the links members type, legitimately come in two shapes: an https
+  // address (the picture Google gives us at sign-in) and a data: URL (a photo uploaded here, which
+  // is shrunk in the browser and kept inside the profile document). safeUrl deliberately drops
+  // data: URLs — correct for links, but it silently discarded every uploaded photograph, which is
+  // why they appeared to save and then never showed. Pictures get their own, equally strict check:
+  // https, or a base64 JPEG/PNG/WebP and nothing else. SVG is excluded on purpose.
+  const DATA_IMAGE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+  function safeImage(v) {
+    if (!v) return "";
+    const s = String(v).trim();
+    if (DATA_IMAGE.test(s)) return s;
+    try { return new URL(s).protocol === "https:" ? s : ""; } catch (e) { return ""; }
+  }
+
   const AVATAR_COLOURS = ["#1f7a4d", "#0f3d2e", "#8a6d10", "#2f6f73", "#7a4b1f", "#3d5a80", "#6b4e71"];
   function initials(name) {
     const parts = String(name || "?").replace(/^(dr\.?|shri|smt\.?)\s+/i, "").split(/\s+/).filter(Boolean);
     return ((parts[0] || "?")[0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
   }
-  function avatar(p, large) {
-    const cls = "avatar" + (large ? " lg" : "");
-    const photo = safeUrl(p.photo_url);
-    if (photo) return `<img class="${cls}" src="${esc(photo)}" alt="" loading="lazy">`;
+  function initialsAvatar(p, cls) {
     let hash = 0;
     for (const ch of String(p.full_name || "")) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
     return `<span class="${cls}" style="background:${AVATAR_COLOURS[hash % AVATAR_COLOURS.length]}" aria-hidden="true">${esc(initials(p.full_name))}</span>`;
+  }
+  function avatar(p, large) {
+    const cls = "avatar" + (large ? " lg" : "");
+    const photo = safeImage(p.photo_url);
+    const fallback = initialsAvatar(p, cls);
+    if (!photo) return fallback;
+    // A picture hosted by Google can stop resolving later. Fall back to the initials rather than
+    // leaving a broken-image icon; the markup swapped in is our own, already escaped.
+    return `<img class="${cls}" src="${esc(photo)}" alt="" loading="lazy"
+      data-fallback="${esc(fallback)}" onerror="this.outerHTML=this.dataset.fallback">`;
   }
 
   function personCard(p) {
@@ -105,5 +126,5 @@ CPCA.ui = (function () {
 
   const yearSpan = (a, b, current) => [a, current ? "Present" : b].filter(Boolean).join(" – ");
 
-  return { esc, safeUrl, avatar, initials, personCard, toast, busy, explain, formValues, yearSpan };
+  return { esc, safeUrl, safeImage, avatar, initials, personCard, toast, busy, explain, formValues, yearSpan };
 })();

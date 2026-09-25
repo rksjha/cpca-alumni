@@ -126,6 +126,10 @@
     if (!ctx.user) { location.hash = "#/join"; return; }
     const id = await data.joinNetwork(ctx.user.displayName || null); // the name Google gives us, if any
     const p = await data.getProfile(id);
+    // Someone signing in with Google already has a picture; use it so the directory is not a wall
+    // of initials. Only ever fills an empty one, so an uploaded photograph is never replaced.
+    const adopted = await data.adoptSignInPhoto(p.id, p.photo_url);
+    if (adopted) p.photo_url = adopted;
     const contact = p.profile_private || { email: ctx.user.email, visibility: "members" };
     let tab = (p.education || []).some((e) => e.is_cpca) ? "basics" : "education";
 
@@ -156,7 +160,10 @@
       basics(host) {
         host.innerHTML = `<form class="panel" id="basics">
           <div style="display:flex;gap:18px;align-items:center;margin-bottom:20px;flex-wrap:wrap"><span id="photo">${avatar(p, true)}</span>
-            <div><label class="btn btn-ghost btn-sm" style="display:inline-flex">Change photo<input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden></label><div class="hint">A clear head-and-shoulders photo works best.</div></div></div>
+            <div><div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label class="btn btn-ghost btn-sm" style="display:inline-flex">${p.photo_url ? "Change photo" : "Add a photo"}<input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+              ${p.photo_url ? '<button type="button" class="btn btn-ghost btn-sm" id="photo-remove">Remove</button>' : ""}</div>
+              <div class="hint">A clear head-and-shoulders photo works best. Every member of the network can see it.</div></div></div>
           <div class="grid-2">
             ${field({ name: "full_name", label: "Full name", required: true, max: 120 }, p.full_name)}
             ${field({ name: "batch_year", label: "CPCA pass-out year (batch)", type: "year" }, p.batch_year)}
@@ -173,7 +180,24 @@
           </div><button class="btn btn-primary">Save</button></form>`;
         host.querySelector("#file").onchange = (e) => {
           const file = e.target.files[0]; if (!file) return;
-          busy(null, async () => { toast("Uploading photo…"); p.photo_url = await data.uploadPhoto(file); await data.saveProfile(p.id, { photo_url: p.photo_url }); host.querySelector("#photo").innerHTML = avatar(p, true); toast("Photo updated"); });
+          busy(null, async () => {
+            toast("Uploading photo…");
+            const url = await data.uploadPhoto(file);
+            await data.saveProfile(p.id, { photo_url: url });
+            p.photo_url = url;
+            panes.basics(host);        // redraw so the picture and the Remove button both appear
+            toast("Photo updated — it is now visible to every member");
+          });
+        };
+        const remove = host.querySelector("#photo-remove");
+        if (remove) remove.onclick = (e) => {
+          if (!confirm("Remove your profile photo? Your initials will be shown instead.")) return;
+          busy(e.target, async () => {
+            await data.saveProfile(p.id, { photo_url: null });
+            p.photo_url = null;
+            panes.basics(host);
+            toast("Photo removed");
+          });
         };
         host.querySelector("#basics").onsubmit = (e) => {
           e.preventDefault();

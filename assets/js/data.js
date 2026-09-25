@@ -268,6 +268,30 @@ CPCA.data = (function () {
     return saved;
   }
 
+  /**
+   * The photograph the sign-in provider already holds for this person (Google supplies one; the
+   * email-link route does not). Returned as an https address, asked for at a size that suits the
+   * avatar rather than the thumbnail Google hands over by default.
+   *
+   * It is only ever used to fill an EMPTY profile photo — see adoptSignInPhoto. A picture someone
+   * has uploaded here is theirs and is never overwritten.
+   */
+  function signInPhoto() {
+    const user = live && auth.currentUser;
+    const url = (user && user.photoURL) || "";
+    if (!/^https:\/\//.test(url)) return "";
+    return url.replace(/=s\d+(-c)?$/, "=s320$1");   // e.g. ...=s96-c -> ...=s320-c
+  }
+
+  /** Gives a profile with no picture the one from Google, once. Returns the url used, or "". */
+  async function adoptSignInPhoto(profileId, currentPhoto) {
+    if (currentPhoto) return "";            // never replace a photograph the member chose
+    const url = signInPhoto();
+    if (!url) return "";
+    try { await saveProfile(profileId, { photo_url: url }); return url; }
+    catch (e) { console.error(e); return ""; }   // a missing picture must never block the page
+  }
+
   // Photos are shrunk in the browser and stored inside the profile document (about 25 KB),
   // so the portal needs no separate file storage.
   async function uploadPhoto(file) {
@@ -458,6 +482,7 @@ CPCA.data = (function () {
     myMembership, listRooms, getRoom, createRoom, watchMessages, sendMessage, deleteMessage, adminApproveMany,
     ready, getUser, onAuthChange, signInWith, sendEmailCode, signOut, isEmailLink,
     joinNetwork, isAdmin, saveProfile, saveContact, saveRow, deleteRow, saveCompany, uploadPhoto,
+    signInPhoto, adoptSignInPhoto,
     adminListMembers, adminSetStatus, adminSetDistinguished, adminListEmails, adminAddEmail, adminRemoveEmail, adminImport,
   };
 })();
