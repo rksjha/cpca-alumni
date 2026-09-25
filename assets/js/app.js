@@ -33,7 +33,10 @@
   async function start() {
     document.getElementById("preview-bar").hidden = data.live;
     const returningFromSignIn = data.live && data.isEmailLink(); // opened from an emailed sign-in link
-    await data.ready();      // Firebase restores any existing session first
+    // Start-up must survive anything Firebase throws. If it does not, nothing is ever drawn and
+    // the visitor is left on a spinner with no way forward.
+    try { await data.ready(); }   // Firebase restores any existing session first
+    catch (e) { console.error(e); CPCA.authNotice = CPCA.authNotice || CPCA.ui.explain(e); }
     await refreshSession();
     if (returningFromSignIn && ctx.user) location.hash = "#/me";
     data.onAuthChange((event) => {

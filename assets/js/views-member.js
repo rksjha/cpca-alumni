@@ -12,23 +12,56 @@
         <a class="btn btn-primary" href="#/directory">Browse the directory</a></div></div>`;
       return;
     }
+    // Google first, and as the main button. Most CPCA alumni registered with a Gmail address, and
+    // that route signs them in instantly without sending anything — so it cannot run out, while
+    // emailed sign-in links are rationed by Firebase and do run out on a busy day.
     app.innerHTML = `<div class="wrap narrow"><div class="panel">
       <h2 class="center">Join the CPCA Alumni Network</h2>
       <p class="muted small center">New here or returning — it's the same step. No password needed.</p>
-      <button class="btn btn-ghost btn-block" id="google">Continue with Google</button>
-      <div class="divider">or use your email</div>
-      <form id="email-form"><div class="field"><label for="email">Email address</label><input id="email" type="email" required autocomplete="email" placeholder="you@example.com"></div>
-        <button class="btn btn-primary btn-block">Email me a sign-in link</button></form>
+      ${CPCA.authNotice ? `<div class="banner warn">${esc(CPCA.authNotice)}</div>` : ""}
+      <button class="btn btn-primary btn-block" id="google">Continue with Google</button>
+      <p class="hint center" style="margin-top:8px">Quickest way in, and nothing is emailed. Works with any Gmail address.</p>
+      <div class="divider">or use another email address</div>
+      <form id="email-form"><div class="field"><label for="email">Email address</label><input id="email" type="email" required autocomplete="email" placeholder="you@example.com">
+          <div class="hint" id="gmail-hint" hidden>That is a Google address — <strong>Continue with Google</strong> above will sign you in straight away, with no waiting for an email.</div></div>
+        <button class="btn btn-ghost btn-block">Email me a sign-in link</button></form>
       <div id="sent" hidden><div class="banner info">✓ Check your inbox. Open the link we've just emailed you and you'll be signed in — no password needed. (Look in Spam if it hasn't arrived in a minute.)</div></div>
+      <div id="email-down" hidden><div class="banner warn"><strong>Sign-in emails have reached today's limit.</strong>
+        <p style="margin:8px 0 0">Nothing is wrong with your account. Use <strong>Continue with Google</strong> at the top of this page — it signs you in immediately and sends no email.</p>
+        <p style="margin:8px 0 0">If you do not have a Google account on this address, please write to
+        <a href="mailto:admin@cpcaalumni.org?subject=CPCA%20Alumni%20Network%20%E2%80%94%20sign-in%20help">admin@cpcaalumni.org</a> and we will let you in by hand.</p></div></div>
       <p class="hint center" style="margin-top:16px">Trouble signing in? Write to <a href="mailto:admin@cpcaalumni.org?subject=CPCA%20Alumni%20Network%20%E2%80%94%20sign-in%20help">admin@cpcaalumni.org</a> or <a href="mailto:alumnigau@gmail.com?subject=CPCA%20Alumni%20Network%20%E2%80%94%20sign-in%20help">alumnigau@gmail.com</a>.</p>
       <p class="hint center" style="margin-top:16px">Listed among the college's distinguished alumni? Use the same email the college has for you and your ready-made profile is handed to you automatically.</p>
     </div></div>`;
 
+    CPCA.authNotice = null;   // shown once; it belongs to the sign-in attempt just made
+
     const $ = (s) => app.querySelector(s);
     $("#google").onclick = (e) => busy(e.target, () => data.signInWith("google"));
+
+    // Point Google-address holders at the button that always works, before they wait on an email.
+    const GOOGLE_MAIL = /@(gmail|googlemail)\.com$/i;
+    $("#email").oninput = (e) => { $("#gmail-hint").hidden = !GOOGLE_MAIL.test(e.target.value.trim()); };
+
     $("#email-form").onsubmit = (e) => {
       e.preventDefault();
-      busy(e.submitter, async () => { await data.sendEmailCode($("#email").value.trim()); $("#email-form").hidden = true; $("#sent").hidden = false; });
+      busy(e.submitter, async () => {
+        try {
+          await data.sendEmailCode($("#email").value.trim());
+          $("#email-form").hidden = true;
+          $("#sent").hidden = false;
+        } catch (err) {
+          // Running out of sign-in emails is not the member's fault and a toast that disappears
+          // leaves them stuck, so explain it in place and keep it on screen.
+          if (err && (err.code === "auth/quota-exceeded" || err.code === "auth/too-many-requests")) {
+            $("#email-down").hidden = false;
+            $("#google").focus();
+            $("#google").scrollIntoView({ behavior: "smooth", block: "center" });
+            return;
+          }
+          throw err;   // anything else is toasted in plain English by busy()
+        }
+      });
     };
   };
 

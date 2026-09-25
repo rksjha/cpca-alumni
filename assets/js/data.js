@@ -139,14 +139,34 @@ CPCA.data = (function () {
     try { localStorage.setItem(EMAIL_KEY, emailAddr); } catch (e) { /* private browsing */ }
   }
   const isEmailLink = () => live && auth.isSignInWithEmailLink(location.href);
+  /**
+   * Finishes a sign-in that began with an emailed link.
+   *
+   * This must NEVER throw. It runs during start-up, before anything is on screen, so an expired
+   * or already-used link used to reject and leave the visitor staring at a loading spinner for
+   * ever. Instead we record why it failed, clear the dead link out of the address bar, and let
+   * the site carry on loading — the sign-in page then shows the reason.
+   */
   async function completeEmailLink() {
     let emailAddr = "";
-    try { emailAddr = localStorage.getItem(EMAIL_KEY) || ""; } catch (e) { /* ignore */ }
+    try { emailAddr = localStorage.getItem(EMAIL_KEY) || ""; } catch (e) { /* private browsing */ }
+    // The link is often opened in a different browser from the one that asked for it (tapping it
+    // inside the Gmail app, for instance), so the address has to be confirmed.
     if (!emailAddr) emailAddr = window.prompt("Please confirm the email address you asked the sign-in link to be sent to:") || "";
-    if (!emailAddr) return;
-    await auth.signInWithEmailLink(emailAddr, location.href);
-    try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* ignore */ }
-    history.replaceState(null, "", returnUrl() + "#/me"); // drop the one-time link from the address bar
+    if (!emailAddr) {
+      CPCA.authNotice = "To finish signing in we need the email address the link was sent to. Please try again, or use “Continue with Google”.";
+      history.replaceState(null, "", returnUrl() + "#/join");
+      return;
+    }
+    try {
+      await auth.signInWithEmailLink(emailAddr, location.href);
+      try { localStorage.removeItem(EMAIL_KEY); } catch (e) { /* ignore */ }
+      history.replaceState(null, "", returnUrl() + "#/me"); // drop the one-time link from the address bar
+    } catch (e) {
+      console.error(e);
+      CPCA.authNotice = CPCA.ui.explain(e);
+      history.replaceState(null, "", returnUrl() + "#/join"); // a dead link must not be retried on refresh
+    }
   }
   const signOut = () => auth.signOut();
 

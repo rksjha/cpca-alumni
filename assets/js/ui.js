@@ -52,12 +52,43 @@ CPCA.ui = (function () {
     toastTimer = setTimeout(() => (el.className = ""), isError ? 6000 : 3000);
   }
 
+  // Firebase reports problems as codes like "auth/quota-exceeded", and its raw message text
+  // ("Firebase: Exceeded daily quota for email sign-in. (auth/quota-exceeded).") is meaningless
+  // to an alumnus and looks broken. Translate the ones that actually happen into plain English
+  // that says what to do next.
+  const ERRORS = {
+    "auth/quota-exceeded": "We have sent as many sign-in emails as we are allowed today. Use “Continue with Google” instead — it works straight away and sends no email.",
+    "auth/too-many-requests": "That has been tried several times just now. Wait a minute, or use “Continue with Google”.",
+    "auth/invalid-email": "That does not look like a complete email address. Please check it and try again.",
+    "auth/missing-email": "Please type your email address first.",
+    "auth/network-request-failed": "We could not reach the network. Check your connection and try again.",
+    "auth/user-disabled": "This account has been suspended. Please write to admin@cpcaalumni.org.",
+    "auth/expired-action-code": "That sign-in link has expired. Ask for a new one, or use “Continue with Google”.",
+    "auth/invalid-action-code": "That sign-in link has already been used. Ask for a new one, or use “Continue with Google”.",
+    "auth/account-exists-with-different-credential": "You joined by a different route last time. Try “Continue with Google”, or ask for a sign-in link by email.",
+    "auth/unauthorized-domain": "Sign-in is not permitted from this address. Please write to admin@cpcaalumni.org.",
+    "permission-denied": "You do not have permission for that. If you have just joined, an administrator needs to approve you first.",
+    "unavailable": "The connection dropped for a moment. Please try again.",
+    "resource-exhausted": "The portal is unusually busy. Please try again in a few minutes.",
+  };
+
+  // Turns any error into something a person can act on. Never returns raw Firebase text.
+  function explain(e) {
+    const known = ERRORS[(e && e.code) || ""];
+    if (known) return known;
+    const msg = String((e && e.message) || "");
+    if (/^Firebase:|FirebaseError/i.test(msg)) {
+      return "Something went wrong at our end. Please try “Continue with Google”, or write to admin@cpcaalumni.org.";
+    }
+    return msg || "Something went wrong. Please try again.";
+  }
+
   // Runs an async action from a button: disables it, shows errors as a toast, re-enables.
   async function busy(button, fn) {
     const label = button ? button.textContent : "";
     if (button) { button.disabled = true; button.textContent = "Please wait…"; }
     try { return await fn(); }
-    catch (e) { console.error(e); toast(e.message || "Something went wrong. Please try again.", true); }
+    catch (e) { console.error(e); toast(explain(e), true); }
     finally { if (button) { button.disabled = false; button.textContent = label; } }
   }
 
@@ -74,5 +105,5 @@ CPCA.ui = (function () {
 
   const yearSpan = (a, b, current) => [a, current ? "Present" : b].filter(Boolean).join(" – ");
 
-  return { esc, safeUrl, avatar, initials, personCard, toast, busy, formValues, yearSpan };
+  return { esc, safeUrl, avatar, initials, personCard, toast, busy, explain, formValues, yearSpan };
 })();
